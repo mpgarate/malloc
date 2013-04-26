@@ -1,5 +1,17 @@
-# Ignore everything
-*
+# Object files
+*.o
 
-#Except for these:
-!mm.c
+# Libraries
+*.lib
+*.a
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
