@@ -32,9 +32,9 @@ team_t team = {
 	/* First member's NYU NetID*/
 	"mg3626@nyu.edu",
 	/* Second member's full name (leave blank if none) */
-	"",
+	"William Garate",
 	/* Second member's email address (leave blank if none) */
-	""
+	"bill.garate@nyu.edu"
 };
 
 /* single word (4) or double word (8) alignment */
