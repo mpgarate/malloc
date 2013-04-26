@@ -30,7 +30,7 @@ team_t team = {
 	/* First member's full name */
 	"Michael Garate",
 	/* First member's NYU NetID*/
-	"mg3626@nyu.edu",
+	"mpgarate@nyu.edu",
 	/* Second member's full name (leave blank if none) */
 	"William Garate",
 	/* Second member's email address (leave blank if none) */
