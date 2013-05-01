@@ -173,6 +173,34 @@ void mm_free(void *bp)
     if (heap_listp == 0){
 	mm_init();
     }
+	
+	
+/*
+ * 			Let's fill these free block sizes:
+ *			array[x]		0	1	2	3		4
+ *			double words:	2	3	4	5-8		9+
+ *			bytes:			16	24	32	40-64	72-infinity
+ */	
+	
+	if (size > 71) {
+		//do stuff
+	}
+	else if (size > 39){
+	
+	}
+	else if (size > 31){
+	
+	}
+	else if (size > 23){
+	
+	}
+	else if (size > 15){
+	
+	}
+	else {
+	 //coalesce or something
+	}
+	
 /* $begin mmfree */
 
     PUT(HDRP(bp), PACK(size, 0));
