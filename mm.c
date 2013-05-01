@@ -16,7 +16,7 @@
 
 team_t team = {
 	/* Team name */
-	"instructors",
+	"[team_t team]",
 	/* First member's full name */
 	"Michael Garate",
 	/* First member's NYU NetID */
@@ -28,11 +28,6 @@ team_t team = {
 };
 
 /* Macros based on book code mm.c */
-
-/*
- * If NEXT_FIT defined use next fit search, else use first fit search 
- */
-#define NEXT_FITx
 
 /* $begin mallocmacros */
 /* Basic constants and macros */
@@ -64,9 +59,6 @@ team_t team = {
 
 /* Global variables */
 static char *heap_listp = 0;  /* Pointer to first block */  
-#ifdef NEXT_FIT
-static char *rover;           /* Next fit rover */
-#endif
 
 /* Function prototypes for internal helper routines */
 static void *extend_heap(size_t words);
@@ -85,20 +77,36 @@ static void checkblock(void *bp);
 int mm_init(void) 
 {
     /* Create the initial empty heap */
-    if ((heap_listp = mem_sbrk(4*WSIZE)) == (void *)-1) //line:vm:mm:begininit
+    if ((heap_listp = mem_sbrk(12*WSIZE)) == (void *)-1) //line:vm:mm:begininit
 	return -1;
+	
+	
+	int *fblocks;
+	fblocks = (int*)heap_listp;
+    heap_listp += (8*WSIZE);
+	
+	fblocks[0] = 0xDEADBEEF; //later make this a NULL or something
+	fblocks[1] = 0xDEADBEEF; //later make this a NULL or something
+	fblocks[2] = 0xDEADBEEF; //later make this a NULL or something
+	fblocks[3] = 0xDEADBEEF; //later make this a NULL or something
+	fblocks[4] = 0xDEADBEEF; //later make this a NULL or something
+	
+	
     PUT(heap_listp, 0);                          /* Alignment padding */
     PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1)); /* Prologue header */ 
     PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1)); /* Prologue footer */ 
     PUT(heap_listp + (3*WSIZE), PACK(0, 1));     /* Epilogue header */
     heap_listp += (2*WSIZE);                     //line:vm:mm:endinit  
-/* $end mminit */
-
-#ifdef NEXT_FIT
-    rover = heap_listp;
-#endif
-/* $begin mminit */
-
+	
+	/* Create array of lists to store addresses of free blocks by size */
+	/*
+	 * 			Let's store these free block sizes:
+	 *			array[x]		0	1	2	3		4
+	 *			double words:	2	3	4	5-8		9+
+	 *			bytes:			16	24	32	40-64	72-infinity
+	 */	
+	 
+	
     /* Extend the empty heap with a free block of CHUNKSIZE bytes */
     if (extend_heap(CHUNKSIZE/WSIZE) == NULL) 
 	return -1;
@@ -128,6 +136,7 @@ void *mm_malloc(size_t size)
 
     /* Adjust block size to include overhead and alignment reqs. */
     if (size <= DSIZE)                                          //line:vm:mm:sizeadjust1
+	/* Maybe we could save space here */
 	asize = 2*DSIZE;                                        //line:vm:mm:sizeadjust2
     else
 	asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE); //line:vm:mm:sizeadjust3
@@ -207,14 +216,6 @@ static void *coalesce(void *bp)
 	PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
 	bp = PREV_BLKP(bp);
     }
-/* $end mmfree */
-#ifdef NEXT_FIT
-    /* Make sure the rover isn't pointing into the free block */
-    /* that we just coalesced */
-    if ((rover > (char *)bp) && (rover < NEXT_BLKP(bp))) 
-	rover = bp;
-#endif
-/* $begin mmfree */
     return bp;
 }
 /* $end mmfree */
@@ -323,38 +324,19 @@ static void place(void *bp, size_t asize)
 /* $begin mmfirstfit */
 /* $begin mmfirstfit-proto */
 static void *find_fit(size_t asize)
-/* $end mmfirstfit-proto */
 {
-/* $end mmfirstfit */
-
-#ifdef NEXT_FIT 
-    /* Next fit search */
-    char *oldrover = rover;
-
-    /* Search from the rover to the end of list */
-    for ( ; GET_SIZE(HDRP(rover)) > 0; rover = NEXT_BLKP(rover))
-	if (!GET_ALLOC(HDRP(rover)) && (asize <= GET_SIZE(HDRP(rover))))
-	    return rover;
-
-    /* search from start of list to old rover */
-    for (rover = heap_listp; rover < oldrover; rover = NEXT_BLKP(rover))
-	if (!GET_ALLOC(HDRP(rover)) && (asize <= GET_SIZE(HDRP(rover))))
-	    return rover;
-
-    return NULL;  /* no fit found */
-#else 
 /* $begin mmfirstfit */
     /* First fit search */
     void *bp;
 
     for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+	/* If it's free and requested size fits, return bp*/
 	if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
 	    return bp;
 	}
     }
     return NULL; /* No fit */
 /* $end mmfirstfit */
-#endif
 }
 
 static void printblock(void *bp) 
