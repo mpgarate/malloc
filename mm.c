@@ -16,7 +16,7 @@
 
 team_t team = {
 	/* Team name */
-	"[team_t team]",
+	"pingüinos",
 	/* First member's full name */
 	"Michael Garate",
 	/* First member's NYU NetID */
@@ -121,6 +121,8 @@ int mm_init(void)
 /* $begin mmmalloc */
 void *mm_malloc(size_t size) 
 {
+	checkheap(1);
+	
     size_t asize;      /* Adjusted block size */
     size_t extendsize; /* Amount to extend heap if no fit */
     char *bp;      
@@ -286,11 +288,33 @@ void *mm_realloc(void *ptr, size_t size)
     return newptr;
 }
 
-/* 
- * check - We don't check anything right now. 
+/* Check. Here's the description from the assignment pdf:
+
+Heap Consistency Checker
+	Dynamic memory allocators are notoriously tricky beasts to program correctly and efficiently. They are
+	difficult to program correctly because they involve a lot of untyped pointer manipulation. You will find it
+	very helpful to write a heap checker that scans the heap and checks it for consistency.
+	Some examples of what a heap checker might check are:
+	
+	• Is every block in the free list marked as free?
+	• Are there any contiguous free blocks that somehow escaped coalescing?
+	• Is every free block actually in the free list?
+	• Do the pointers in the free list point to valid free blocks?
+	• Do any allocated blocks overlap?
+	• Do the pointers in a heap block point to valid heap addresses (as opposed to stack addresses)
+	
+	Your heap checker will consist of the function int mm check(void) in mm.c. It will check any invari-
+	ants or consistency conditions you consider prudent. It returns a nonzero value if and only if your heap is
+	consistent. You are not limited to the listed suggestions nor are you required to check all of them. You are
+	encouraged to print out error messages when mm check fails.
+	This consistency checker is for your own debugging during development. When you submit mm.c, make
+	sure to comment out any calls to mm check as they will slow down your throughput. Style points will be
+	given for your mm check function. Make sure to put in comments and document what you are checking.
+
  */
 void mm_check(int verbose)  
-{ 
+{
+
 }
 
 /* 
@@ -381,6 +405,7 @@ static void printblock(void *bp)
 	printf("%p: EOL\n", bp);
 	return;
     }
+	else printf("%p: NEOL\n", bp);
 
     /*  printf("%p: header: [%p:%c] footer: [%p:%c]\n", bp, 
 	hsize, (halloc ? 'a' : 'f'), 
@@ -402,7 +427,7 @@ void checkheap(int verbose)
 {
     char *bp = heap_listp;
 
-    if (verbose)
+    if (verbose==2)
 	printf("Heap (%p):\n", heap_listp);
 
     if ((GET_SIZE(HDRP(heap_listp)) != DSIZE) || !GET_ALLOC(HDRP(heap_listp)))
