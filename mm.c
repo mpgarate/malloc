@@ -57,11 +57,11 @@ team_t team = {
 #define PREV_BLKP(bp)  ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE))) //line:vm:mm:prevblkp
 
 /* Given block ptr bp, write the address of next and previous free blocks */
-#define	PUT_FREE(bp)	PUT(((HDRP(bp)) + WSIZE), bp)
-#define PUT_PREV(bp)	PUT(((HDRP(bp)) + DSIZE), bp)
+#define	PUT_NEXT_FREE(bp)	PUT(((HDRP(bp)) + WSIZE), bp)
+#define PUT_PREV_FREE(bp)	PUT(((HDRP(bp)) + DSIZE), bp)
 /* Given block ptr bp, read the address of next and previous free blocks */
-#define	GET_FREE(bp)	GET((HDRP(bp)) + WSIZE)
-#define GET_PREV(bp)	GET((HDRP(bp)) + DSIZE)
+#define	GET_NEXT_FREE(bp)	GET((HDRP(bp)) + WSIZE)
+#define GET_PREV_FREE(bp)	GET((HDRP(bp)) + DSIZE)
 
 /* $end mallocmacros */
 
@@ -196,33 +196,33 @@ void mm_free(void *bp)
 	 
 	if (size > 71) {
 		if (fblocks[4] == 0x00000000)
-		fblocks[4] = *bp;
+		fblocks[4] = bp;
 		else 
-		addToList(4, *bp);
+		addToList(fblocks[4], bp);
 	}
 	else if (size > 39){
 		if (fblocks[3] == 0x00000000)
-		fblocks[3] = *bp;
+		fblocks[3] = bp;
 		else 
-		addToList(4, *bp);
+		addToList(3, bp);
 	}
 	else if (size > 31){
 		if (fblocks[2] == 0x00000000)
-		fblocks[2] = *bp;
+		fblocks[2] = bp;
 		else 
-		addToList(4, *bp);
+		addToList(2, bp);
 	}
 	else if (size > 23){
 		if (fblocks[1] == 0x00000000)
-		fblocks[1] = *bp;
+		fblocks[1] = bp;
 		else 
-		addToList(4, *bp);
+		addToList(1, bp);
 	}
 	else if (size > 15){
 		if (fblocks[0] == 0x00000000)
-		fblocks[0] = *bp;
+		fblocks[0] = bp;
 		else 
-		addToList(4, *bp);
+		addToList(0, bp);
 	}
 	else {
 		coalesce(heap_listp); //this might not be right
@@ -239,12 +239,14 @@ void mm_free(void *bp)
 /* stores the passed value in the header of the last item in fblocks[arrayIndex]*/
 static void addToList(void *bp, int arrayIndex)
 {
-	&fblocks[arrayIndex]
-	while(next(*bp) != 0)
+	//void* addr = &fblocks[arrayIndex];
+	while(GET_NEXT_FREE(bp) != 0)
 	{
-	
+		bp = GET_NEXT_FREE(bp);
 	}
-	prev(*bp) = 
+	SET_NEXT_FREE(bp);
+	bp = GET_NEXT_FREE(bp);
+	SET_NEXT_FREE(0);
 }
 
 
