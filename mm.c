@@ -448,6 +448,10 @@ void checkheap(int verbose)
 			printf("Double free block!\n");
 		}
     }
+	
+	/* get starting address and length. loop through to make sure that no starting addresses occur in that range */
+	
+	
 
 	/* Check for a bad epilogue header */
     if (verbose)
