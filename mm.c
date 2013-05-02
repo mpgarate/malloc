@@ -57,17 +57,17 @@ team_t team = {
 #define PREV_BLKP(bp)  ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE))) //line:vm:mm:prevblkp
 
 /* Given block ptr bp, write the address of next and previous free blocks */
-#define	PUT_NEXT_FREE(bp)	PUT(((HDRP(bp)) + WSIZE), bp)
-#define PUT_PREV_FREE(bp)	PUT(((HDRP(bp)) + DSIZE), bp)
+#define	PUT_NEXT_FREE(bp, addr)	PUT(bp, addr)
+#define PUT_PREV_FREE(bp, addr)	PUT(bp, addr)
 /* Given block ptr bp, read the address of next and previous free blocks */
-#define	GET_NEXT_FREE(bp)	GET((HDRP(bp)) + WSIZE)
-#define GET_PREV_FREE(bp)	GET((HDRP(bp)) + DSIZE)
+#define	GET_NEXT_FREE(bp)	GET((bp) + WSIZE)
+#define GET_PREV_FREE(bp)	GET((bp) + DSIZE)
 
 /* $end mallocmacros */
 
 /* Global variables */
 static char *heap_listp = 0;  /* Pointer to first block */  
-static int *fblocks;
+static void **fblocks;
 
 /* Function prototypes for internal helper routines */
 static void *extend_heap(size_t words);
@@ -78,7 +78,7 @@ static void printblock(void *bp);
 static void checkheap(int verbose);
 static void checkblock(void *bp);
 
-static void addToList(void *bp, int arrayIndex);
+static void addToList(void *fb, void *bp); //fb stands for Free Block
 
 /* 
  * mm_init - Initialize the memory manager 
@@ -92,7 +92,7 @@ int mm_init(void)
 	return -1;
 	
 	
-	fblocks = (int*)heap_listp;
+	fblocks = (void*)heap_listp;
     heap_listp += (8*WSIZE);
 	
 	fblocks[0] = 0x00000000; //later make this a NULL or something
@@ -100,7 +100,6 @@ int mm_init(void)
 	fblocks[2] = 0x00000000; //later make this a NULL or something
 	fblocks[3] = 0x00000000; //later make this a NULL or something
 	fblocks[4] = 0x00000000; //later make this a NULL or something
-	
 	
     PUT(heap_listp, 0);                          /* Alignment padding */
     PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1)); /* Prologue header */ 
@@ -175,6 +174,7 @@ void *mm_malloc(size_t size)
 /* $begin mmfree */
 void mm_free(void *bp)
 {
+
 /* $end mmfree */
     if(bp == 0) 
 	return;
@@ -193,40 +193,35 @@ void mm_free(void *bp)
  *			double words:	2	3	4	5-8		9+
  *			bytes:			16	24	32	40-64	72-infinity
  */	
-	 
+	int index = 0;
 	if (size > 71) {
-		if (fblocks[4] == 0x00000000)
-		fblocks[4] = bp;
-		else 
-		addToList(fblocks[4], bp);
+		index = 4;
 	}
 	else if (size > 39){
-		if (fblocks[3] == 0x00000000)
-		fblocks[3] = bp;
-		else 
-		addToList(3, bp);
+		index = 3;
 	}
 	else if (size > 31){
-		if (fblocks[2] == 0x00000000)
-		fblocks[2] = bp;
-		else 
-		addToList(2, bp);
+		index = 2;
 	}
 	else if (size > 23){
-		if (fblocks[1] == 0x00000000)
-		fblocks[1] = bp;
-		else 
-		addToList(1, bp);
+		index = 1;
 	}
 	else if (size > 15){
-		if (fblocks[0] == 0x00000000)
-		fblocks[0] = bp;
-		else 
-		addToList(0, bp);
+		index = 0;
 	}
 	else {
 		coalesce(heap_listp); //this might not be right
 	}
+	
+	if (fblocks[index] == 0x00000000)
+		{
+			fblocks[index] = bp;
+			printf("bp is: %x\n*bp is: %x\n", bp, bp);
+			PUT_NEXT_FREE(bp, 0);
+			PUT_PREV_FREE(bp, 0);
+		}
+	else 
+		addToList(fblocks[4], bp);
 	
 /* $begin mmfree */
 
@@ -237,16 +232,18 @@ void mm_free(void *bp)
 
 
 /* stores the passed value in the header of the last item in fblocks[arrayIndex]*/
-static void addToList(void *bp, int arrayIndex)
+static void addToList(void *fb, void *bp)
 {
+
 	//void* addr = &fblocks[arrayIndex];
-	while(GET_NEXT_FREE(bp) != 0)
+	while(GET_NEXT_FREE(fb) != 0)
 	{
-		bp = GET_NEXT_FREE(bp);
+			printf("got here!\n"); fflush(stdout);
+		fb = (void*)GET_NEXT_FREE(fb);
 	}
-	SET_NEXT_FREE(bp);
-	bp = GET_NEXT_FREE(bp);
-	SET_NEXT_FREE(0);
+	PUT_NEXT_FREE(fb, *(unsigned int *)bp);
+	fb = (void*)GET_NEXT_FREE(fb);
+	PUT_NEXT_FREE(fb, 0);//fasf
 }
 
 
