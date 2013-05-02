@@ -4,7 +4,7 @@
  * in the CS:APP2e text. Blocks must be aligned to doubleword (8 byte) 
  * boundaries. Minimum block size is 16 bytes. 
  * 
- * Book code found here: http://csapp.cs.cmu.edu/public/code.html
+ * Parts based on book code found here: http://csapp.cs.cmu.edu/public/code.html
  */
  
 #include <stdio.h>
@@ -46,10 +46,10 @@ team_t team = {
 
 /* Read the size and allocated fields from address p */
 #define GET_SIZE(p)  (GET(p) & ~0x7)                   //line:vm:mm:getsize
-#define GET_ALLOC(p) (GET(p) & 0x1)                    //line:vm:mm:getalloc
+#define GET_ALLOC(p) (GET(p) & 0x1)                    //use 1 for allocated, 0 for free
 
 /* Given block ptr bp, compute address of its header and footer */
-#define HDRP(bp)       ((char *)(bp) - WSIZE)                      //line:vm:mm:hdrp
+#define HDRP(bp)       ((char *)(bp) - WSIZE)                      //use 1 for allocated, 0 for free
 #define FTRP(bp)       ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE) //line:vm:mm:ftrp
 
 /* Given block ptr bp, compute address of next and previous blocks */
@@ -405,17 +405,19 @@ static void printblock(void *bp)
 	printf("%p: EOL\n", bp);
 	return;
     }
-	else printf("%p: NEOL\n", bp);
 
-    /*  printf("%p: header: [%p:%c] footer: [%p:%c]\n", bp, 
+    printf("%p: header: [%p:%c] footer: [%p:%c]\n", bp, 
 	hsize, (halloc ? 'a' : 'f'), 
-	fsize, (falloc ? 'a' : 'f')); */
+	fsize, (falloc ? 'a' : 'f')); 
 }
 
 static void checkblock(void *bp) 
 {
+	/* make sure block is aligned to doubleword */
     if ((size_t)bp % 8)
 	printf("Error: %p is not doubleword aligned\n", bp);
+	
+	/* make sure header and footer match */
     if (GET(HDRP(bp)) != GET(FTRP(bp)))
 	printf("Error: header does not match footer\n");
 }
@@ -430,18 +432,27 @@ void checkheap(int verbose)
     if (verbose==2)
 	printf("Heap (%p):\n", heap_listp);
 
+	/* Check for a bad prologue header */
     if ((GET_SIZE(HDRP(heap_listp)) != DSIZE) || !GET_ALLOC(HDRP(heap_listp)))
 	printf("Bad prologue header\n");
     checkblock(heap_listp);
 
+	/* Loop through memory until header is 0 */
     for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
 	if (verbose) 
 	    printblock(bp);
 	checkblock(bp);
+	/* Check if two blocks next to each other are free */
+	if(!(GET_ALLOC(HDRP(bp))) && !(GET_ALLOC(HDRP(bp+GET_SIZE(HDRP(bp))))))
+		{
+			printf("Double free block!\n");
+		}
     }
 
+	/* Check for a bad epilogue header */
     if (verbose)
 	printblock(bp);
-    if ((GET_SIZE(HDRP(bp)) != 0) || !(GET_ALLOC(HDRP(bp))))
+	/* make sure that header exists and allocated bit is zero*/
+    if ((GET_SIZE(HDRP(bp)) != 0) || !(GET_ALLOC(HDRP(bp)))) 
 	printf("Bad epilogue header\n");
 }
