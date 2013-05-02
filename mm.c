@@ -59,6 +59,7 @@ team_t team = {
 
 /* Global variables */
 static char *heap_listp = 0;  /* Pointer to first block */  
+static int *fblocks;
 
 /* Function prototypes for internal helper routines */
 static void *extend_heap(size_t words);
@@ -81,7 +82,6 @@ int mm_init(void)
 	return -1;
 	
 	
-	int *fblocks;
 	fblocks = (int*)heap_listp;
     heap_listp += (8*WSIZE);
 	
@@ -185,22 +185,26 @@ void mm_free(void *bp)
  */	
 	
 	if (size > 71) {
-		//do stuff
+		fblocks[4] = *heap_listp;
 	}
 	else if (size > 39){
 	
+		fblocks[3] = *heap_listp;
 	}
 	else if (size > 31){
 	
+		fblocks[2] = *heap_listp;
 	}
 	else if (size > 23){
 	
+		fblocks[1] = *heap_listp;
 	}
 	else if (size > 15){
 	
+		fblocks[0] = *heap_listp;
 	}
 	else {
-	 //coalesce or something
+		coalesce(heap_listp);
 	}
 	
 /* $begin mmfree */
@@ -405,10 +409,10 @@ static void printblock(void *bp)
 	printf("%p: EOL\n", bp);
 	return;
     }
-
+/*
     printf("%p: header: [%p:%c] footer: [%p:%c]\n", bp, 
 	hsize, (halloc ? 'a' : 'f'), 
-	fsize, (falloc ? 'a' : 'f')); 
+	fsize, (falloc ? 'a' : 'f')); */
 }
 
 static void checkblock(void *bp) 
@@ -450,8 +454,7 @@ void checkheap(int verbose)
     }
 	
 	/* get starting address and length. loop through to make sure that no starting addresses occur in that range */
-	
-	
+
 
 	/* Check for a bad epilogue header */
     if (verbose)
