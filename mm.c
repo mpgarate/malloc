@@ -55,6 +55,14 @@ team_t team = {
 /* Given block ptr bp, compute address of next and previous blocks */
 #define NEXT_BLKP(bp)  ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE))) //line:vm:mm:nextblkp
 #define PREV_BLKP(bp)  ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE))) //line:vm:mm:prevblkp
+
+/* Given block ptr bp, write the address of next and previous free blocks */
+#define	PUT_FREE(bp)	PUT(((HDRP(bp)) + WSIZE), bp)
+#define PUT_PREV(bp)	PUT(((HDRP(bp)) + DSIZE), bp)
+/* Given block ptr bp, read the address of next and previous free blocks */
+#define	GET_FREE(bp)	GET((HDRP(bp)) + WSIZE)
+#define GET_PREV(bp)	GET((HDRP(bp)) + DSIZE)
+
 /* $end mallocmacros */
 
 /* Global variables */
@@ -69,6 +77,8 @@ static void *coalesce(void *bp);
 static void printblock(void *bp); 
 static void checkheap(int verbose);
 static void checkblock(void *bp);
+
+static void addToList(void *bp, int arrayIndex);
 
 /* 
  * mm_init - Initialize the memory manager 
@@ -85,11 +95,11 @@ int mm_init(void)
 	fblocks = (int*)heap_listp;
     heap_listp += (8*WSIZE);
 	
-	fblocks[0] = 0xDEADBEEF; //later make this a NULL or something
-	fblocks[1] = 0xDEADBEEF; //later make this a NULL or something
-	fblocks[2] = 0xDEADBEEF; //later make this a NULL or something
-	fblocks[3] = 0xDEADBEEF; //later make this a NULL or something
-	fblocks[4] = 0xDEADBEEF; //later make this a NULL or something
+	fblocks[0] = 0x00000000; //later make this a NULL or something
+	fblocks[1] = 0x00000000; //later make this a NULL or something
+	fblocks[2] = 0x00000000; //later make this a NULL or something
+	fblocks[3] = 0x00000000; //later make this a NULL or something
+	fblocks[4] = 0x00000000; //later make this a NULL or something
 	
 	
     PUT(heap_listp, 0);                          /* Alignment padding */
@@ -183,28 +193,39 @@ void mm_free(void *bp)
  *			double words:	2	3	4	5-8		9+
  *			bytes:			16	24	32	40-64	72-infinity
  */	
-	
+	 
 	if (size > 71) {
-		fblocks[4] = *heap_listp;
+		if (fblocks[4] == 0x00000000)
+		fblocks[4] = *bp;
+		else 
+		addToList(4, *bp);
 	}
 	else if (size > 39){
-	
-		fblocks[3] = *heap_listp;
+		if (fblocks[3] == 0x00000000)
+		fblocks[3] = *bp;
+		else 
+		addToList(4, *bp);
 	}
 	else if (size > 31){
-	
-		fblocks[2] = *heap_listp;
+		if (fblocks[2] == 0x00000000)
+		fblocks[2] = *bp;
+		else 
+		addToList(4, *bp);
 	}
 	else if (size > 23){
-	
-		fblocks[1] = *heap_listp;
+		if (fblocks[1] == 0x00000000)
+		fblocks[1] = *bp;
+		else 
+		addToList(4, *bp);
 	}
 	else if (size > 15){
-	
-		fblocks[0] = *heap_listp;
+		if (fblocks[0] == 0x00000000)
+		fblocks[0] = *bp;
+		else 
+		addToList(4, *bp);
 	}
 	else {
-		coalesce(heap_listp);
+		coalesce(heap_listp); //this might not be right
 	}
 	
 /* $begin mmfree */
@@ -213,6 +234,19 @@ void mm_free(void *bp)
     PUT(FTRP(bp), PACK(size, 0));
     coalesce(bp);
 }
+
+
+/* stores the passed value in the header of the last item in fblocks[arrayIndex]*/
+static void addToList(void *bp, int arrayIndex)
+{
+	&fblocks[arrayIndex]
+	while(next(*bp) != 0)
+	{
+	
+	}
+	prev(*bp) = 
+}
+
 
 /* $end mmfree */
 /*
