@@ -57,11 +57,11 @@ team_t team = {
 #define PREV_BLKP(bp)  ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE))) //line:vm:mm:prevblkp
 
 /* Given block ptr bp, write the address of next and previous free blocks */
-#define	PUT_NEXT_FREE(bp, addr)	PUT(bp, addr)
-#define PUT_PREV_FREE(bp, addr)	PUT(bp, addr)
+#define	NEXT_FREE(bp)	(char *)(bp)
+#define PREV_FREE(bp)	(char *)(bp + WSIZE)
 /* Given block ptr bp, read the address of next and previous free blocks */
-#define	GET_NEXT_FREE(bp)	GET((bp) + WSIZE)
-#define GET_PREV_FREE(bp)	GET((bp) + DSIZE)
+#define	GET_NEXT_FREE(bp)	(bp)
+#define GET_PREV_FREE(bp)	((bp) + WSIZE)
 
 /* $end mallocmacros */
 
@@ -217,8 +217,8 @@ void mm_free(void *bp)
 		{
 			fblocks[index] = bp;
 			printf("bp is: %x\n*bp is: %x\n", bp, bp);
-			PUT_NEXT_FREE(bp, 0);
-			PUT_PREV_FREE(bp, 0);
+			PUT(NEXT_FREE(bp), 0);
+			PUT(PREV_FREE(bp), 0);
 		}
 	else 
 		addToList(fblocks[4], bp);
@@ -238,12 +238,12 @@ static void addToList(void *fb, void *bp)
 	//void* addr = &fblocks[arrayIndex];
 	while(GET_NEXT_FREE(fb) != 0)
 	{
-			printf("got here!\n"); fflush(stdout);
-		fb = (void*)GET_NEXT_FREE(fb);
+			printf("got here! %s\n", &GET_NEXT_FREE(fb)); fflush(stdout);
+		fb = (void*)GET_NEXT_FREE(fb); //this line needs work. 
 	}
-	PUT_NEXT_FREE(fb, *(unsigned int *)bp);
+	PUT(NEXT_FREE(fb), *(unsigned int *)bp);
 	fb = (void*)GET_NEXT_FREE(fb);
-	PUT_NEXT_FREE(fb, 0);//fasf
+	PUT(NEXT_FREE(fb), 0);
 }
 
 
