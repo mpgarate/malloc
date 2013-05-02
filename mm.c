@@ -56,12 +56,9 @@ team_t team = {
 #define NEXT_BLKP(bp)  ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE))) //line:vm:mm:nextblkp
 #define PREV_BLKP(bp)  ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE))) //line:vm:mm:prevblkp
 
-/* Given block ptr bp, write the address of next and previous free blocks */
+/* Given block ptr bp, get the next and previous free blocks */
 #define	NEXT_FREE(bp)	(char *)(bp)
 #define PREV_FREE(bp)	(char *)(bp + WSIZE)
-/* Given block ptr bp, read the address of next and previous free blocks */
-#define	GET_NEXT_FREE(bp)	(bp)
-#define GET_PREV_FREE(bp)	((bp) + WSIZE)
 
 /* $end mallocmacros */
 
@@ -236,13 +233,13 @@ static void addToList(void *fb, void *bp)
 {
 
 	//void* addr = &fblocks[arrayIndex];
-	while(GET_NEXT_FREE(fb) != 0)
+	while(NEXT_FREE(fb) != 0)
 	{
-			printf("got here! %s\n", &GET_NEXT_FREE(fb)); fflush(stdout);
-		fb = (void*)GET_NEXT_FREE(fb); //this line needs work. 
+			printf("got here! %s\n", NEXT_FREE(fb)); fflush(stdout);
+		fb = (void*)NEXT_FREE(fb); //this line needs work. 
 	}
 	PUT(NEXT_FREE(fb), *(unsigned int *)bp);
-	fb = (void*)GET_NEXT_FREE(fb);
+	fb = (void*)NEXT_FREE(fb);
 	PUT(NEXT_FREE(fb), 0);
 }
 
