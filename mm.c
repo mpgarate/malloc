@@ -151,7 +151,7 @@ void *mm_malloc(size_t size)
 
 	
 	int index = 0;
-	if (asize > 71) {
+	if (asize > 71) {					//we need to check that asize isn't too big, either
 		index = 4;
 		//custom find_fit
 	}
@@ -212,6 +212,7 @@ void *mm_malloc(size_t size)
     if ((bp = extend_heap(extendsize/WSIZE)) == NULL)  
 	return NULL;                                  //line:vm:mm:growheap2
     place(bp, asize);                                 //line:vm:mm:growheap3
+	printf("Extended heap by %d for %p\n", asize, bp); fflush(stdout);
     return bp;
 } 
 /* $end mmmalloc */
@@ -267,7 +268,7 @@ void mm_free(void *bp)
 		}
 	PUT(NEXT_FREE(bp), 0xDEADBEEF);
 	addToList(fblocks[index], bp);
-
+	printf("freed block %p\n", bp);
 	
     PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
