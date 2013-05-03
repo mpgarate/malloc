@@ -213,12 +213,12 @@ void mm_free(void *bp)
 	if (fblocks[index] == 0x00000000)
 		{
 			fblocks[index] = bp;
-			printf("bp is: %x\n*bp is: %x\n", bp, bp);
-			PUT(NEXT_FREE(bp), 0);
-			PUT(PREV_FREE(bp), 0);
+			printf("bp is: %x\n", bp);
+			PUT(NEXT_FREE(bp), 0xDEADBEEF);
+			PUT(PREV_FREE(bp), 0xDEADBEEF);
 		}
-	else 
-		addToList(fblocks[4], bp);
+		
+	addToList(fblocks[index], bp);
 	
 /* $begin mmfree */
 
@@ -231,16 +231,15 @@ void mm_free(void *bp)
 /* stores the passed value in the header of the last item in fblocks[arrayIndex]*/
 static void addToList(void *fb, void *bp)
 {
-
-	//void* addr = &fblocks[arrayIndex];
-	while(NEXT_FREE(fb) != 0)
+	while(GET(NEXT_FREE(fb)) != 0xDEADBEEF)
 	{
-			printf("got here! %s\n", NEXT_FREE(fb)); fflush(stdout);
-		fb = (void*)NEXT_FREE(fb); //this line needs work. 
+		printf("in the loop! %08x | %08x \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);
+		fb = (void*)GET(NEXT_FREE(fb)); //this line needs work
 	}
+	printf("after loop! %08x | %08x \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);
 	PUT(NEXT_FREE(fb), *(unsigned int *)bp);
-	fb = (void*)NEXT_FREE(fb);
-	PUT(NEXT_FREE(fb), 0);
+	fb = (void*)GET(NEXT_FREE(fb));
+	PUT(NEXT_FREE(bp), 0xDEADBEEF);
 }
 
 
