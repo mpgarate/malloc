@@ -149,11 +149,62 @@ void *mm_malloc(size_t size)
     else
 	asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE); //line:vm:mm:sizeadjust3
 
+	
+	int index = 0;
+	if (asize > 71) {
+		index = 4;
+		//custom find_fit
+	}
+	else if (asize > 39){
+		index = 3;
+	}
+	else if (asize > 31){
+		index = 2;
+	}
+	else if (asize > 23){
+		index = 1;
+	}
+	else if (asize > 15){
+		index = 0;
+	}
+	else {
+		//coalesce(heap_listp); //this might not be right
+	}
+	
+	/*SUDO rm -f /code */
+	
+	//(char *)GET(NEXT_FREE(fb)
+	
+	printf("line: %08x\n", (char *)GET(&fblocks[index])); fflush(stdout);
+	if ((char *)GET(&fblocks[index]) != 0x00000000)
+		{
+			printf("hello world \n"); fflush(stdout);
+			if ((char *)GET(NEXT_FREE(fblocks[index])) != 0xDEADBEEF)
+			{
+				//save the address we want to return
+				//make [index] point to former list item #2
+				
+			}
+			else
+			{
+				//save the address we want to return
+				fblocks[index] = 0x00000000;
+			}
+			
+		//return addr;
+		}
+	
+	
+	
+	
+	
+	
+	
     /* Search the free list for a fit */
-    if ((bp = find_fit(asize)) != NULL) {  //line:vm:mm:findfitcall
-	place(bp, asize);                  //line:vm:mm:findfitplace
-	return bp;
-    }
+ //   if ((bp = find_fit(asize)) != NULL) {  //line:vm:mm:findfitcall
+//	place(bp, asize);                  //line:vm:mm:findfitplace
+//	return bp;
+ //   }
 
     /* No fit found. Get more memory and place the block */
     extendsize = MAX(asize,CHUNKSIZE);                 //line:vm:mm:growheap1
@@ -172,17 +223,14 @@ void *mm_malloc(size_t size)
 void mm_free(void *bp)
 {
 
-/* $end mmfree */
     if(bp == 0) 
 	return;
 
-/* $begin mmfree */
     size_t size = GET_SIZE(HDRP(bp));
-/* $end mmfree */
+	
     if (heap_listp == 0){
 	mm_init();
     }
-	
 	
 /*
  * 			Let's fill these free block sizes:
@@ -207,24 +255,23 @@ void mm_free(void *bp)
 		index = 0;
 	}
 	else {
-		coalesce(heap_listp); //this might not be right
+		//coalesce(heap_listp); //this might not be right
 	}
 	
 	if (fblocks[index] == 0x00000000)
 		{
 			fblocks[index] = bp;
 			printf("bp is: %x\n", bp);
-			PUT(NEXT_FREE(bp), 0xDEADBEEF);
 			PUT(PREV_FREE(bp), 0xDEADBEEF);
 		}
-		
+	PUT(NEXT_FREE(bp), 0xDEADBEEF);
 	addToList(fblocks[index], bp);
-	
-/* $begin mmfree */
 
+	
     PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
     coalesce(bp);
+	
 }
 
 
@@ -234,7 +281,7 @@ static void addToList(void *fb, void *bp)
 	while(GET(NEXT_FREE(fb)) != 0xDEADBEEF)
 	{
 		printf("in the loop! %08x | %08x \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);
-		fb = (void*)GET(NEXT_FREE(fb)); //this line needs work
+		fb = (char *)GET(NEXT_FREE(fb)); //this line needs work
 	}
 	printf("after loop! %08x | %08x \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);
 	PUT(NEXT_FREE(fb), *(unsigned int *)bp);
