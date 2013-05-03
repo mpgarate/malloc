@@ -175,23 +175,23 @@ void *mm_malloc(size_t size)
 	
 	//(char *)GET(NEXT_FREE(fb)
 	
-	printf("line: %08x\n", (char *)GET(&fblocks[index])); fflush(stdout);
-	if ((char *)GET(&fblocks[index]) != 0x00000000)
+	void* addr;
+	void* free = &fblocks[index];
+	printf("fblocks[%i]: %08x\n", index, GET(free)); fflush(stdout);
+	if (GET(free) != 0x00000000)
 		{
-			printf("hello world \n"); fflush(stdout);
-			if ((char *)GET(NEXT_FREE(fblocks[index])) != 0xDEADBEEF)
+			if (GET(NEXT_FREE(free)) != 0xDEADBEEF)
 			{
-				//save the address we want to return
-				//make [index] point to former list item #2
-				
+				printf("Big money: %p\n", GET(free)); fflush(stdout);
+				addr = (char *)GET(free); //save the address we want to return
+				fblocks[index] = (char *)GET(NEXT_FREE(free)); //make [index] point to former list item #2
 			}
 			else
 			{
-				//save the address we want to return
+				addr = (char *)GET(NEXT_FREE(free)); //save the address we want to return
 				fblocks[index] = 0x00000000;
 			}
-			
-		//return addr;
+		return addr;
 		}
 	
 	
@@ -207,6 +207,7 @@ void *mm_malloc(size_t size)
  //   }
 
     /* No fit found. Get more memory and place the block */
+	
     extendsize = MAX(asize,CHUNKSIZE);                 //line:vm:mm:growheap1
     if ((bp = extend_heap(extendsize/WSIZE)) == NULL)  
 	return NULL;                                  //line:vm:mm:growheap2
