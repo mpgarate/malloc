@@ -184,6 +184,7 @@ void *mm_malloc(size_t size)
 			{
 				printf("Big money: %p\n", GET(free)); fflush(stdout);
 				addr = (char *)GET(free); //save the address we want to return
+				printf("addr is: %p\n", addr);
 				fblocks[index] = (char *)GET(NEXT_FREE(free)); //make [index] point to former list item #2
 			}
 			else
