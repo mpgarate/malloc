@@ -27,6 +27,9 @@ team_t team = {
 	"bill.garate@nyu.edu"
 };
 
+
+#define DEBUG 0	/* printf and flush, verbose, debug */
+
 /* Macros based on book code mm.c */
 
 /* $begin mallocmacros */
@@ -69,7 +72,7 @@ static void **fblocks;
 /* Function prototypes for internal helper routines */
 static void *extend_heap(size_t words);
 static void place(void *bp, size_t asize);
-static void *find_fit(size_t asize);
+static void *find_fit(size_t asize, int index);
 static void *coalesce(void *bp);
 static void printblock(void *bp); 
 static void checkheap(int verbose);
@@ -127,7 +130,9 @@ int mm_init(void)
 /* $begin mmmalloc */
 void *mm_malloc(size_t size) 
 {
-	checkheap(1);
+if(DEBUG){printf("mm_malloc called for %i\n", size); fflush(stdout);}
+	
+	//checkheap(1);
 	
     size_t asize;      /* Adjusted block size */
     size_t extendsize; /* Amount to extend heap if no fit */
@@ -149,7 +154,7 @@ void *mm_malloc(size_t size)
     else
 	asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE); //line:vm:mm:sizeadjust3
 
-	
+	/* Calculate the appropriate list segment to use */
 	int index = 0;
 	if (asize > 71) {					//we need to check that asize isn't too big, either
 		index = 4;
@@ -171,41 +176,12 @@ void *mm_malloc(size_t size)
 		//coalesce(heap_listp); //this might not be right
 	}
 	
-	/*SUDO rm -f /code */
 	
-	//(char *)GET(NEXT_FREE(fb)
-	
-	void* addr;
-	void* free = &fblocks[index];
-	printf("fblocks[%i]: %08x\n", index, GET(free)); fflush(stdout);
-	if (GET(free) != 0x00000000)
-		{
-			if (GET(NEXT_FREE(free)) != 0xDEADBEEF)
-			{
-				printf("Big money: %p\n", GET(free)); fflush(stdout);
-				addr = (char *)GET(free); //save the address we want to return
-				printf("addr is: %p\n", addr);
-				fblocks[index] = (char *)GET(NEXT_FREE(free)); //make [index] point to former list item #2
-			}
-			else
-			{
-				addr = (char *)GET(NEXT_FREE(free)); //save the address we want to return
-				fblocks[index] = 0x00000000;
-			}
-		return addr;
-		}
-	
-	
-	
-	
-	
-	
-	
-    /* Search the free list for a fit */
- //   if ((bp = find_fit(asize)) != NULL) {  //line:vm:mm:findfitcall
-//	place(bp, asize);                  //line:vm:mm:findfitplace
-//	return bp;
- //   }
+    /* Search the seg list for a fit */
+		if ((bp = find_fit(asize, index)) != NULL) {  
+		place(bp, asize);
+		return bp;
+    }
 
     /* No fit found. Get more memory and place the block */
 	
@@ -213,7 +189,9 @@ void *mm_malloc(size_t size)
     if ((bp = extend_heap(extendsize/WSIZE)) == NULL)  
 	return NULL;                                  //line:vm:mm:growheap2
     place(bp, asize);                                 //line:vm:mm:growheap3
-	printf("Extended heap by %d for %p\n", asize, bp); fflush(stdout);
+	
+	if(DEBUG){printf("Extended heap by %d for %p\n", asize, bp); fflush(stdout);}
+	
     return bp;
 } 
 /* $end mmmalloc */
@@ -226,6 +204,8 @@ void *mm_malloc(size_t size)
 void mm_free(void *bp)
 {
 
+	if(DEBUG){printf("mm_free called for bp: %x\n", bp); fflush(stdout);}
+	
     if(bp == 0) 
 	return;
 
@@ -264,12 +244,14 @@ void mm_free(void *bp)
 	if (fblocks[index] == 0x00000000)
 		{
 			fblocks[index] = bp;
-			printf("bp is: %x\n", bp);
+			//printf("bp is: %x\n", bp);
 			PUT(PREV_FREE(bp), 0xDEADBEEF);
 		}
 	PUT(NEXT_FREE(bp), 0xDEADBEEF);
 	addToList(fblocks[index], bp);
-	printf("freed block %p\n", bp);
+	if(DEBUG){printf("freed block %p\n", bp);}
+
+	fblocks[index] = 0x00000000;
 	
     PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
@@ -283,12 +265,13 @@ static void addToList(void *fb, void *bp)
 {
 	while(GET(NEXT_FREE(fb)) != 0xDEADBEEF)
 	{
-		printf("in the loop! %08x | %08x \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);
-		fb = (char *)GET(NEXT_FREE(fb)); //this line needs work
+		if(DEBUG){printf("in the loop! %08x | %08x \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
+		
+		fb = NEXT_FREE(fb); //this line needs to increment
 	}
-	printf("after loop! %08x | %08x \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);
+	//printf("after loop! %08x | %08x \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);
 	PUT(NEXT_FREE(fb), *(unsigned int *)bp);
-	fb = (void*)GET(NEXT_FREE(fb));
+	fb = (void*)NEXT_FREE(fb);
 	PUT(NEXT_FREE(bp), 0xDEADBEEF);
 }
 
@@ -306,20 +289,20 @@ static void *coalesce(void *bp)
     size_t size = GET_SIZE(HDRP(bp));
 
     if (prev_alloc && next_alloc) {            /* Case 1 */
-	return bp;
+		return bp;
     }
 
     else if (prev_alloc && !next_alloc) {      /* Case 2 */
-	size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
-	PUT(HDRP(bp), PACK(size, 0));
-	PUT(FTRP(bp), PACK(size,0));
+		size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
+		PUT(HDRP(bp), PACK(size, 0));
+		PUT(FTRP(bp), PACK(size,0));
     }
 
     else if (!prev_alloc && next_alloc) {      /* Case 3 */
-	size += GET_SIZE(HDRP(PREV_BLKP(bp)));
-	PUT(FTRP(bp), PACK(size, 0));
-	PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
-	bp = PREV_BLKP(bp);
+		size += GET_SIZE(HDRP(PREV_BLKP(bp)));
+		PUT(FTRP(bp), PACK(size, 0));
+		PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
+		bp = PREV_BLKP(bp);
     }
 
     else {                                     /* Case 4 */
@@ -458,21 +441,57 @@ static void place(void *bp, size_t asize)
  */
 /* $begin mmfirstfit */
 /* $begin mmfirstfit-proto */
-static void *find_fit(size_t asize)
-{
+static void *find_fit(size_t asize, int index){
+
+
+	//this code needs to fall back on bigger lists if amount not available
+	
+	char *addr;
+	void *free = &fblocks[index]; //this and previous line used to be void *
+//	printf("fblocks[%i]: %08x\n", index, GET(free)); fflush(stdout);
+	if (GET(free) != 0x00000000) 	/* Check if this free block contains data */
+		{
+			/* See if block is not the last free one and is large enough */
+			if (GET(NEXT_FREE(free)) != 0xDEADBEEF && asize <= GET_SIZE(HDRP(free)) ) //DEADBEEF is our terminator
+			{
+//				printf("Saving: %p\n", GET(free)); fflush(stdout);
+				addr = (char *)free; //save the address we want to return
+//				printf("addr is: %p\n", addr);
+				fblocks[index] = (char *)GET(NEXT_FREE(free)); //make [index] point to former list item #2
+			}
+			else if(index < 4) //look in the next biggest size available
+			{
+//				printf("calling find fit again\n"); fflush(stdout);
+				addr = find_fit(asize, index + 1);
+			}
+			else
+			{
+//				printf("in the else\n"); fflush(stdout);
+//				printf("Saving: %p\n", GET(free)); fflush(stdout);
+				addr = (char *)GET(free); //save the address we want to return
+//				printf("addr is: %p\n", addr);
+				fblocks[index] = 0x00000000;
+			}
+		return addr;
+		}
+		return NULL;
+}
+
+//static void *find_fit(size_t asize)
+//{
 /* $begin mmfirstfit */
     /* First fit search */
-    void *bp;
+ //   void *bp;
 
-    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+//    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
 	/* If it's free and requested size fits, return bp*/
-	if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
-	    return bp;
-	}
-    }
-    return NULL; /* No fit */
+//	if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+//	    return bp;
+//	}
+//    }
+//    return NULL; /* No fit */
 /* $end mmfirstfit */
-}
+//}
 
 static void printblock(void *bp) 
 {
