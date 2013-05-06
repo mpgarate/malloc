@@ -28,7 +28,7 @@ team_t team = {
 };
 
 
-#define DEBUG 0	/* printf and flush, verbose, debug */
+#define DEBUG 1	/* printf and flush, verbose, debug */
 
 /* Macros based on book code mm.c */
 
@@ -78,7 +78,7 @@ static void printblock(void *bp);
 static void checkheap(int verbose);
 static void checkblock(void *bp);
 
-static void addToList(void *fb, void *bp); //fb stands for Free Block
+static void addToList(int size, void *bp); //fb stands for Free Block
 
 /* 
  * mm_init - Initialize the memory manager 
@@ -132,7 +132,7 @@ void *mm_malloc(size_t size)
 {
 if(DEBUG){printf("mm_malloc called for %i\n", size); fflush(stdout);}
 	
-	//checkheap(1);
+	checkheap(1);
 	
     size_t asize;      /* Adjusted block size */
     size_t extendsize; /* Amount to extend heap if no fit */
@@ -221,6 +221,25 @@ void mm_free(void *bp)
  *			double words:	2	3	4	5-8		9+
  *			bytes:			16	24	32	40-64	72-infinity
  */	
+
+	
+
+	addToList(size, bp);
+	if(DEBUG){printf("freed block %p\n", bp);}
+
+	
+    PUT(HDRP(bp), PACK(size, 0));
+    PUT(FTRP(bp), PACK(size, 0));
+    coalesce(bp);
+	
+}
+
+
+/* stores the passed value in the header of the last item in fblocks[arrayIndex]*/
+static void addToList(int size, void *bp)
+{
+
+
 	int index = 0;
 	if (size > 71) {
 		index = 4;
@@ -240,39 +259,29 @@ void mm_free(void *bp)
 	else {
 		//coalesce(heap_listp); //this might not be right
 	}
+	void *fb = fblocks[index];
 	
-	if (fblocks[index] == 0x00000000)
+		if (fb == 0x00000000)
 		{
-			fblocks[index] = bp;
+			fb = bp;
 			//printf("bp is: %x\n", bp);
 			PUT(PREV_FREE(bp), 0xDEADBEEF);
 		}
 	PUT(NEXT_FREE(bp), 0xDEADBEEF);
-	addToList(fblocks[index], bp);
-	if(DEBUG){printf("freed block %p\n", bp);}
-
-	fblocks[index] = 0x00000000;
 	
-    PUT(HDRP(bp), PACK(size, 0));
-    PUT(FTRP(bp), PACK(size, 0));
-    coalesce(bp);
-	
-}
-
-
-/* stores the passed value in the header of the last item in fblocks[arrayIndex]*/
-static void addToList(void *fb, void *bp)
-{
 	while(GET(NEXT_FREE(fb)) != 0xDEADBEEF)
 	{
 		if(DEBUG){printf("in the loop! %08x | %08x \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
 		
 		fb = NEXT_FREE(fb); //this line needs to increment
 	}
-	//printf("after loop! %08x | %08x \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);
+	if(DEBUG){printf("after loop! %08x | %08x \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
+	
 	PUT(NEXT_FREE(fb), *(unsigned int *)bp);
 	fb = (void*)NEXT_FREE(fb);
 	PUT(NEXT_FREE(bp), 0xDEADBEEF);
+	
+	fblocks[index] = 0x00000000;
 }
 
 
@@ -428,6 +437,8 @@ static void place(void *bp, size_t asize)
 	bp = NEXT_BLKP(bp);
 	PUT(HDRP(bp), PACK(csize-asize, 0));
 	PUT(FTRP(bp), PACK(csize-asize, 0));
+	printf("PLACE %i minus %i in list\n", csize, asize);
+	addToList(csize-asize, bp);
     }
     else { 
 	PUT(HDRP(bp), PACK(csize, 1));
@@ -448,28 +459,29 @@ static void *find_fit(size_t asize, int index){
 	
 	char *addr;
 	void *free = &fblocks[index]; //this and previous line used to be void *
-//	printf("fblocks[%i]: %08x\n", index, GET(free)); fflush(stdout);
+	if(DEBUG){printf("fblocks[%i]: %08x\n", index, GET(free)); fflush(stdout);}
+
 	if (GET(free) != 0x00000000) 	/* Check if this free block contains data */
 		{
 			/* See if block is not the last free one and is large enough */
 			if (GET(NEXT_FREE(free)) != 0xDEADBEEF && asize <= GET_SIZE(HDRP(free)) ) //DEADBEEF is our terminator
 			{
-//				printf("Saving: %p\n", GET(free)); fflush(stdout);
+				if(DEBUG){printf("Saving: %p\n", GET(free)); fflush(stdout);}
 				addr = (char *)free; //save the address we want to return
-//				printf("addr is: %p\n", addr);
+				if(DEBUG){printf("addr is: %p\n", addr);}
 				fblocks[index] = (char *)GET(NEXT_FREE(free)); //make [index] point to former list item #2
 			}
 			else if(index < 4) //look in the next biggest size available
 			{
-//				printf("calling find fit again\n"); fflush(stdout);
+				if(DEBUG){printf("calling find fit again\n"); fflush(stdout);}
 				addr = find_fit(asize, index + 1);
 			}
 			else
 			{
-//				printf("in the else\n"); fflush(stdout);
-//				printf("Saving: %p\n", GET(free)); fflush(stdout);
+				if(DEBUG){printf("in the else\n"); fflush(stdout);}
+				if(DEBUG){printf("Saving: %p\n", GET(free)); fflush(stdout);}
 				addr = (char *)GET(free); //save the address we want to return
-//				printf("addr is: %p\n", addr);
+				if(DEBUG){printf("addr is: %p\n", addr);}
 				fblocks[index] = 0x00000000;
 			}
 		return addr;
