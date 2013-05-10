@@ -92,7 +92,9 @@ static void printblock(void *bp);
 static void checkheap(int verbose);
 static void checkblock(void *bp);
 
+
 static void addToList(int size, void *bp); //fb stands for Free Block
+void deleteFromList(void *bp);
 void printlist(void);
 static void printfreeblock(void *bp);
 
@@ -494,6 +496,7 @@ static void *find_fit(size_t asize, int index){
 				if(DEBUG){printf("Saving: %p\n", GET(free)); fflush(stdout);}
 				addr = (char *)free; //save the address we want to return
 				if(DEBUG){printf("addr is: %p\n", addr);}
+				deleteFromList(free);
 				fblocks[index] = (char *)GET(NEXT_FREE(free)); //make [index] point to former list item #2
 			}
 			else if(index < 4) //look in the next biggest size available
@@ -508,6 +511,7 @@ static void *find_fit(size_t asize, int index){
 				if(DEBUG){printf("Saving: %p\n", GET(free)); fflush(stdout);}
 				addr = free; //save the address we want to return
 				if(DEBUG){printf("addr is: %p\n", addr);}
+				deleteFromList(free);
 				fblocks[index] = 0x00000000;
 			}
 		return addr;
@@ -518,6 +522,12 @@ static void *find_fit(size_t asize, int index){
 			return find_fit(asize, index + 1);
 		}
 		return NULL;
+}
+
+void deleteFromList(void *bp)
+{
+	void prev = GET(PREV_FREE(bp));
+	PUT(NEXT_FREE(prev)), 0xDEADBEEF)
 }
 
 //static void *find_fit(size_t asize)
