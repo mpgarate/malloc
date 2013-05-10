@@ -29,6 +29,7 @@ team_t team = {
 
 
 #define DEBUG 1	/* printf and flush, verbose, debug */
+#define PRINTITALL 1	/* printf and flush, verbose, debug */
 
 /* Macros based on book code mm.c */
 
@@ -87,10 +88,10 @@ static void addToList(int size, void *bp); //fb stands for Free Block
 /* $begin mminit */
 int mm_init(void) 
 {
-    /* Create the initial empty heap */
+	void *bp;
+	/* Create the initial empty heap */
     if ((heap_listp = mem_sbrk(12*WSIZE)) == (void *)-1) //line:vm:mm:begininit
 	return -1;
-	
 	
 	fblocks = (void*)heap_listp;
     heap_listp += (8*WSIZE);
@@ -107,6 +108,8 @@ int mm_init(void)
     PUT(heap_listp + (3*WSIZE), PACK(0, 1));     /* Epilogue header */
     heap_listp += (2*WSIZE);                     //line:vm:mm:endinit  
 	
+
+	
 	/* Create array of lists to store addresses of free blocks by size */
 	/*
 	 * 			Let's store these free block sizes:
@@ -117,8 +120,13 @@ int mm_init(void)
 	 
 	
     /* Extend the empty heap with a free block of CHUNKSIZE bytes */
-    if (extend_heap(CHUNKSIZE/WSIZE) == NULL) 
-	return -1;
+    //if (bp = extend_heap(CHUNKSIZE/WSIZE) == NULL) 
+	//return -1;
+	//if(PRINTITALL){printf("init extended heap by %i\n", CHUNKSIZE/WSIZE);fflush(stdout);}
+//	PUT(HDRP(heap_listp), PACK(1024, 0));
+ //   PUT(FTRP(heap_listp), PACK(1024, 0));
+  //  coalesce(heap_listp);
+//	addToList(1024, heap_listp);
     return 0;
 }
 /* $end mminit */
@@ -130,10 +138,9 @@ int mm_init(void)
 /* $begin mmmalloc */
 void *mm_malloc(size_t size) 
 {
-if(DEBUG){printf("mm_malloc called for %i\n", size); fflush(stdout);}
-	
-	checkheap(1);
-	
+	checkheap(1);fflush(stdout);
+	if(PRINTITALL){printf("mm_malloc called for %i\n", size); fflush(stdout);}
+
     size_t asize;      /* Adjusted block size */
     size_t extendsize; /* Amount to extend heap if no fit */
     char *bp;      
@@ -148,17 +155,16 @@ if(DEBUG){printf("mm_malloc called for %i\n", size); fflush(stdout);}
 	return NULL;
 
     /* Adjust block size to include overhead and alignment reqs. */
-    if (size <= DSIZE)                                          //line:vm:mm:sizeadjust1
+    if (size <= DSIZE)
 	/* Maybe we could save space here */
-	asize = 2*DSIZE;                                        //line:vm:mm:sizeadjust2
+	asize = 2*DSIZE;
     else
-	asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE); //line:vm:mm:sizeadjust3
+	asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE); 
 
 	/* Calculate the appropriate list segment to use */
 	int index = 0;
 	if (asize > 71) {					//we need to check that asize isn't too big, either
 		index = 4;
-		//custom find_fit
 	}
 	else if (asize > 39){
 		index = 3;
@@ -172,39 +178,36 @@ if(DEBUG){printf("mm_malloc called for %i\n", size); fflush(stdout);}
 	else if (asize > 15){
 		index = 0;
 	}
-	else {
-		//coalesce(heap_listp); //this might not be right
-	}
 	
 	
     /* Search the seg list for a fit */
-		if ((bp = find_fit(asize, index)) != NULL) {  
+		if ((bp = find_fit(asize, index)) != NULL) { 
+		if(PRINTITALL){printf("Found a fit!\n"); fflush(stdout);}
 		place(bp, asize);
 		return bp;
     }
 
     /* No fit found. Get more memory and place the block */
 	
-    extendsize = MAX(asize,CHUNKSIZE);                 //line:vm:mm:growheap1
+    extendsize = MAX(asize,CHUNKSIZE);
     if ((bp = extend_heap(extendsize/WSIZE)) == NULL)  
-	return NULL;                                  //line:vm:mm:growheap2
-    place(bp, asize);                                 //line:vm:mm:growheap3
-	
-	if(DEBUG){printf("Extended heap by %d for %p\n", asize, bp); fflush(stdout);}
+	return NULL;
+    place(bp, asize); 
+	if(PRINTITALL){printf("Extended heap by %d\n", asize); fflush(stdout);}
+	if(PRINTITALL){printf("Returning %p\n", bp); fflush(stdout);}
 	
     return bp;
 } 
-/* $end mmmalloc */
 
 /* 
  * mm_free - Free a block 
  * Based on book code mm.c
  */
-/* $begin mmfree */
 void mm_free(void *bp)
 {
+	checkheap(1);
+	if(PRINTITALL){printf("mm_free called for bp: %x\n", bp); fflush(stdout);}
 
-	if(DEBUG){printf("mm_free called for bp: %x\n", bp); fflush(stdout);}
 	
     if(bp == 0) 
 	return;
@@ -222,8 +225,6 @@ void mm_free(void *bp)
  *			bytes:			16	24	32	40-64	72-infinity
  */	
 
-	
-
 	addToList(size, bp);
 	if(DEBUG){printf("freed block %p\n", bp);}
 
@@ -238,8 +239,6 @@ void mm_free(void *bp)
 /* stores the passed value in the header of the last item in fblocks[arrayIndex]*/
 static void addToList(int size, void *bp)
 {
-
-
 	int index = 0;
 	if (size > 71) {
 		index = 4;
@@ -257,15 +256,19 @@ static void addToList(int size, void *bp)
 		index = 0;
 	}
 	else {
-		//coalesce(heap_listp); //this might not be right
+		if(DEBUG){printf("FREE ERROR: No suitable list!\n");fflush(stdout);}
+		coalesce(bp); //this might not be right
 	}
 	void *fb = fblocks[index];
 	
-		if (fb == 0x00000000)
+		if (fb == 0x00000000) //nothing in this list yet
 		{
-			fb = bp;
-			//printf("bp is: %x\n", bp);
 			PUT(PREV_FREE(bp), 0xDEADBEEF);
+			PUT(NEXT_FREE(bp), 0xDEADBEEF);
+			//fb = bp; //does this make sense?
+			if(PRINTITALL){printf("Adding to list: %p\n", bp); fflush(stdout);}
+			fblocks[index] = bp;
+			return;
 		}
 	PUT(NEXT_FREE(bp), 0xDEADBEEF);
 	
@@ -273,24 +276,22 @@ static void addToList(int size, void *bp)
 	{
 		if(DEBUG){printf("in the loop! %08x | %08x \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
 		
-		fb = NEXT_FREE(fb); //this line needs to increment
+		fb = NEXT_FREE(fb); //this line increments to the next free block
 	}
 	if(DEBUG){printf("after loop! %08x | %08x \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
 	
-	PUT(NEXT_FREE(fb), *(unsigned int *)bp);
-	fb = (void*)NEXT_FREE(fb);
+	PUT(NEXT_FREE(fb), GET(bp));
+	fb = NEXT_FREE(fb);
 	PUT(NEXT_FREE(bp), 0xDEADBEEF);
 	
-	fblocks[index] = 0x00000000;
+	//fblocks[index] = 0x00000000;
 }
 
 
-/* $end mmfree */
 /*
  * coalesce - Boundary tag coalescing. Return ptr to coalesced block
  * Based on book code mm.c
  */
-/* $begin mmfree */
 static void *coalesce(void *bp) 
 {
     size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
@@ -424,10 +425,7 @@ static void *extend_heap(size_t words)
  * place - Place block of asize bytes at start of free block bp 
  *         and split if remainder would be at least minimum block size
  */
-/* $begin mmplace */
-/* $begin mmplace-proto */
 static void place(void *bp, size_t asize)
-     /* $end mmplace-proto */
 {
     size_t csize = GET_SIZE(HDRP(bp));   
 
@@ -437,7 +435,7 @@ static void place(void *bp, size_t asize)
 	bp = NEXT_BLKP(bp);
 	PUT(HDRP(bp), PACK(csize-asize, 0));
 	PUT(FTRP(bp), PACK(csize-asize, 0));
-	printf("PLACE %i minus %i in list\n", csize, asize);
+	if(DEBUG){printf("PLACE %i minus %i in list\n", csize, asize);}
 	addToList(csize-asize, bp);
     }
     else { 
@@ -445,23 +443,19 @@ static void place(void *bp, size_t asize)
 	PUT(FTRP(bp), PACK(csize, 1));
     }
 }
-/* $end mmplace */
 
 /* 
  * find_fit - Find a fit for a block with asize bytes 
  */
-/* $begin mmfirstfit */
-/* $begin mmfirstfit-proto */
 static void *find_fit(size_t asize, int index){
-
-
-	//this code needs to fall back on bigger lists if amount not available
 	
 	char *addr;
 	void *free = &fblocks[index]; //this and previous line used to be void *
+	int check;
 	if(DEBUG){printf("fblocks[%i]: %08x\n", index, GET(free)); fflush(stdout);}
-
-	if (GET(free) != 0x00000000) 	/* Check if this free block contains data */
+	
+	check = GET(free);
+	if (check != 0) 	/* Check if this free block exists */
 		{
 			/* See if block is not the last free one and is large enough */
 			if (GET(NEXT_FREE(free)) != 0xDEADBEEF && asize <= GET_SIZE(HDRP(free)) ) //DEADBEEF is our terminator
@@ -480,11 +474,16 @@ static void *find_fit(size_t asize, int index){
 			{
 				if(DEBUG){printf("in the else\n"); fflush(stdout);}
 				if(DEBUG){printf("Saving: %p\n", GET(free)); fflush(stdout);}
-				addr = (char *)GET(free); //save the address we want to return
+				addr = GET(free); //save the address we want to return
 				if(DEBUG){printf("addr is: %p\n", addr);}
 				fblocks[index] = 0x00000000;
 			}
 		return addr;
+		}
+		/* Check for block available in a bigger list */
+		if(index < 4)
+		{
+			return find_fit(asize, index + 1);
 		}
 		return NULL;
 }
@@ -519,10 +518,10 @@ static void printblock(void *bp)
 	printf("%p: EOL\n", bp);
 	return;
     }
-/*
+
     printf("%p: header: [%p:%c] footer: [%p:%c]\n", bp, 
 	hsize, (halloc ? 'a' : 'f'), 
-	fsize, (falloc ? 'a' : 'f')); */
+	fsize, (falloc ? 'a' : 'f')); 
 }
 
 static void checkblock(void *bp) 
