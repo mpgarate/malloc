@@ -106,7 +106,7 @@ int mm_init(void)
     PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1)); /* Prologue header */ 
     PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1)); /* Prologue footer */ 
     PUT(heap_listp + (3*WSIZE), PACK(0, 1));     /* Epilogue header */
-    heap_listp += (2*WSIZE);                     //line:vm:mm:endinit  
+    heap_listp += (2*WSIZE);
 	
 
 	
@@ -181,6 +181,7 @@ void *mm_malloc(size_t size)
 	
 	
     /* Search the seg list for a fit */
+		//if(PRINTITALL){printf("Calling find_fit(%d, %d)\n", asize, index); fflush(stdout);}
 		if ((bp = find_fit(asize, index)) != NULL) { 
 		if(PRINTITALL){printf("Found a fit!\n"); fflush(stdout);}
 		place(bp, asize);
@@ -190,12 +191,12 @@ void *mm_malloc(size_t size)
     /* No fit found. Get more memory and place the block */
 	
     extendsize = MAX(asize,CHUNKSIZE);
-    if ((bp = extend_heap(extendsize/WSIZE)) == NULL)  
+    if ((bp = extend_heap(extendsize/WSIZE)) == NULL)
 	return NULL;
     place(bp, asize); 
 	if(PRINTITALL){printf("Extended heap by %d\n", asize); fflush(stdout);}
 	if(PRINTITALL){printf("Returning %p\n", bp); fflush(stdout);}
-	
+
     return bp;
 } 
 
@@ -270,15 +271,15 @@ static void addToList(int size, void *bp)
 			fblocks[index] = bp;
 			return;
 		}
-	PUT(NEXT_FREE(bp), 0xDEADBEEF);
+	//PUT(NEXT_FREE(bp), 0xDEADBEEF);
 	
 	while(GET(NEXT_FREE(fb)) != 0xDEADBEEF)
 	{
-		if(DEBUG){printf("in the loop! %08x | %08x \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
+		if(DEBUG){printf("in the loop! %p | %p \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
 		
-		fb = NEXT_FREE(fb); //this line increments to the next free block
+		fb = GET(NEXT_FREE(fb)); //this line increments to the next free block
 	}
-	if(DEBUG){printf("after loop! %08x | %08x \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
+	if(DEBUG){printf("after loop! %p | %p \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
 	
 	PUT(NEXT_FREE(fb), GET(bp));
 	fb = NEXT_FREE(fb);
@@ -435,7 +436,7 @@ static void place(void *bp, size_t asize)
 	bp = NEXT_BLKP(bp);
 	PUT(HDRP(bp), PACK(csize-asize, 0));
 	PUT(FTRP(bp), PACK(csize-asize, 0));
-	if(DEBUG){printf("PLACE %i minus %i in list\n", csize, asize);}
+	if(DEBUG){printf("PLACE %u minus %u in list\n", csize, asize);}
 	addToList(csize-asize, bp);
     }
     else { 
@@ -455,8 +456,9 @@ static void *find_fit(size_t asize, int index){
 	if(DEBUG){printf("fblocks[%i]: %08x\n", index, GET(free)); fflush(stdout);}
 	
 	check = GET(free);
-	if (check != 0) 	/* Check if this free block exists */
+	if (free != 0) 	/* Check if this free block exists */
 		{
+			int whatsup = GET_SIZE(HDRP(free));
 			/* See if block is not the last free one and is large enough */
 			if (GET(NEXT_FREE(free)) != 0xDEADBEEF && asize <= GET_SIZE(HDRP(free)) ) //DEADBEEF is our terminator
 			{
@@ -470,6 +472,7 @@ static void *find_fit(size_t asize, int index){
 				if(DEBUG){printf("calling find fit again\n"); fflush(stdout);}
 				addr = find_fit(asize, index + 1);
 			}
+			else if (asize > GET_SIZE(HDRP(free))) return; //nothing big enough in the list :(
 			else
 			{
 				if(DEBUG){printf("in the else\n"); fflush(stdout);}
