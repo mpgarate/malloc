@@ -64,7 +64,20 @@ team_t team = {
 #define	NEXT_FREE(bp)	(char *)(bp)
 #define PREV_FREE(bp)	(char *)(bp + WSIZE)
 
-/* $end mallocmacros */
+
+#ifdef DEBUG
+#define Assert(c) doAssert(c)
+#else
+#define Assert(c)
+#endif
+
+void doAssert(int c)
+{
+  if (c) return;
+  int x = 0;
+  x = x / x;
+}
+
 
 /* Global variables */
 static char *heap_listp = 0;  /* Pointer to first block */  
@@ -80,6 +93,9 @@ static void checkheap(int verbose);
 static void checkblock(void *bp);
 
 static void addToList(int size, void *bp); //fb stands for Free Block
+void printlist(void);
+static void printfreeblock(void *bp);
+
 
 /* 
  * mm_init - Initialize the memory manager 
@@ -139,6 +155,7 @@ int mm_init(void)
 void *mm_malloc(size_t size) 
 {
 	checkheap(1);fflush(stdout);
+	printlist();
 	if(PRINTITALL){printf("mm_malloc called for %i\n", size); fflush(stdout);}
 
     size_t asize;      /* Adjusted block size */
@@ -193,10 +210,12 @@ void *mm_malloc(size_t size)
     extendsize = MAX(asize,CHUNKSIZE);
     if ((bp = extend_heap(extendsize/WSIZE)) == NULL)
 	return NULL;
+	if(PRINTITALL){printf("Extended heap by %d\n", (extendsize/WSIZE)); fflush(stdout);}
+	if(PRINTITALL){printf("Calling place (%p, %d)\n", bp, asize); fflush(stdout);}
     place(bp, asize); 
-	if(PRINTITALL){printf("Extended heap by %d\n", asize); fflush(stdout);}
-	if(PRINTITALL){printf("Returning %p\n", bp); fflush(stdout);}
+	if(PRINTITALL){printf("mm_malloc returning %p\n", bp); fflush(stdout);}
 
+	printlist();
     return bp;
 } 
 
@@ -206,8 +225,9 @@ void *mm_malloc(size_t size)
  */
 void mm_free(void *bp)
 {
-	checkheap(1);
+	checkheap(1);	
 	if(PRINTITALL){printf("mm_free called for bp: %x\n", bp); fflush(stdout);}
+	printlist();
 
 	
     if(bp == 0) 
@@ -226,12 +246,11 @@ void mm_free(void *bp)
  *			bytes:			16	24	32	40-64	72-infinity
  */	
 
-	addToList(size, bp);
-	if(DEBUG){printf("freed block %p\n", bp);}
-
 	
     PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
+	addToList(size, bp);
+	if(DEBUG){printf("freed block %p\n", bp);}
     coalesce(bp);
 	
 }
@@ -268,6 +287,7 @@ static void addToList(int size, void *bp)
 			PUT(NEXT_FREE(bp), 0xDEADBEEF);
 			//fb = bp; //does this make sense?
 			if(PRINTITALL){printf("Adding to list: %p\n", bp); fflush(stdout);}
+			if(DEBUG){printf("deadbeef: %u \n", GET(NEXT_FREE(bp))); fflush(stdout);}
 			fblocks[index] = bp;
 			return;
 		}
@@ -276,15 +296,24 @@ static void addToList(int size, void *bp)
 	while(GET(NEXT_FREE(fb)) != 0xDEADBEEF)
 	{
 		if(DEBUG){printf("in the loop! %p | %p \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
-		
-		fb = GET(NEXT_FREE(fb)); //this line increments to the next free block
+		fb = (char *)GET(NEXT_FREE(fb)); //this line increments to the next free block
 	}
 	if(DEBUG){printf("after loop! %p | %p \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
 	
-	PUT(NEXT_FREE(fb), GET(bp));
-	fb = NEXT_FREE(fb);
-	PUT(NEXT_FREE(bp), 0xDEADBEEF);
+	void * lastblock = &fb;
 	
+	PUT(NEXT_FREE(fb), GET(fb));
+	
+	//if(DEBUG){printf("Next: %p Expected: %p \n", NEXT_FREE(fb), &fb); fflush(stdout);}
+	//Assert(NEXT_FREE(fb) == fb);
+	
+	fb = (char *)NEXT_FREE(fb);
+	PUT(PREV_FREE(lastblock), GET(fb));
+	PUT(NEXT_FREE(fb), 0xDEADBEEF);
+	
+	if(DEBUG){printf("deadbeef: %p \n", NEXT_FREE(fb)); fflush(stdout);}
+	
+	//PUT(NEXT_FREE(fb), GET(bp));
 	//fblocks[index] = 0x00000000;
 }
 
@@ -477,7 +506,7 @@ static void *find_fit(size_t asize, int index){
 			{
 				if(DEBUG){printf("in the else\n"); fflush(stdout);}
 				if(DEBUG){printf("Saving: %p\n", GET(free)); fflush(stdout);}
-				addr = GET(free); //save the address we want to return
+				addr = free; //save the address we want to return
 				if(DEBUG){printf("addr is: %p\n", addr);}
 				fblocks[index] = 0x00000000;
 			}
@@ -574,4 +603,53 @@ void checkheap(int verbose)
 	/* make sure that header exists and allocated bit is zero*/
     if ((GET_SIZE(HDRP(bp)) != 0) || !(GET_ALLOC(HDRP(bp)))) 
 	printf("Bad epilogue header\n");
+}
+
+
+void printlist(void) {
+	
+	/* End signal is 0xdeadbeef  */
+	int i = 0;
+	for (i=0; i<5; i++)
+	
+	{
+		printf("LIST %d ------------\n", i); fflush(stdout);
+		if (fblocks[i] != 0) printf("check - %p\n", GET(NEXT_FREE(fblocks[i]))); fflush(stdout);
+		while(fblocks[i] != 0 && GET(NEXT_FREE(fblocks[i])) != 0xDEADBEEF) {
+			printfreeblock(fblocks[i]);
+			fblocks[i] = GET(NEXT_FREE(fblocks[i]));
+			//if (GET(NEXT_FREE(fblocks[i])) == 0xDEADBEEF) {
+			//printf("YOLO\n");fflush(stdout);
+			//break;
+			//}
+			//else break;
+		}
+		printf("End List ----------\n");
+	}
+
+}
+
+static void printfreeblock(void *bp) 
+{
+    size_t hsize, halloc, fsize, falloc, next, prev;
+
+    //checkheap(0);
+    hsize = GET_SIZE(HDRP(bp));
+    halloc = GET_ALLOC(HDRP(bp));  
+    fsize = GET_SIZE(FTRP(bp));
+    falloc = GET_ALLOC(FTRP(bp));
+	next = GET(NEXT_FREE(bp));
+	prev = GET(PREV_FREE(bp));
+
+    if (hsize == 0) {
+	printf("%p: EOL\n", bp);
+	return;
+    }
+    printf("%p: header: [%p:%c] next: [%p] previous: [%p]  footer: [%p:%c]\n", bp, 
+	hsize, (halloc ? 'a' : 'f'),
+	GET(NEXT_FREE(bp)),
+	GET(PREV_FREE(bp)),
+	fsize, (falloc ? 'a' : 'f')
+	
+	);
 }
