@@ -106,7 +106,6 @@ static void printfreeblock(void *bp);
 /* $begin mminit */
 int mm_init(void) 
 {
-	void *bp;
 	/* Create the initial empty heap */
     if ((heap_listp = mem_sbrk(12*WSIZE)) == (void *)-1) //line:vm:mm:begininit
 	return -1;
@@ -228,7 +227,7 @@ void *mm_malloc(size_t size)
 void mm_free(void *bp)
 {
 	checkheap(1);	
-	if(PRINTITALL){printf("mm_free called for bp: %x\n", bp); fflush(stdout);}
+	if(PRINTITALL){printf("mm_free called for bp: %p\n", bp); fflush(stdout);}
 	printlist();
 
 	
@@ -282,7 +281,6 @@ static void addToList(int size, void *bp)
 		coalesce(bp); //this might not be right
 	}
 	void *fb = fblocks[index];
-	
 		if (fb == 0x00000000) //nothing in this list yet
 		{
 			PUT(PREV_FREE(bp), 0xDEADBEEF);
@@ -297,7 +295,7 @@ static void addToList(int size, void *bp)
 	
 	while(GET(NEXT_FREE(fb)) != 0xDEADBEEF)
 	{
-		if(DEBUG){printf("in the loop! %p | %p \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
+		if(DEBUG){printf("in the loop! %u | %p \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
 		fb = (char *)GET(NEXT_FREE(fb)); //this line increments to the next free block
 	}
 	if(DEBUG){printf("after loop! %p | %p \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
@@ -459,7 +457,7 @@ static void *extend_heap(size_t words)
  */
 static void place(void *bp, size_t asize)
 {
-    size_t csize = GET_SIZE(HDRP(bp));   
+    size_t csize = GET_SIZE(HDRP(bp));
 
     if ((csize - asize) >= (2*DSIZE)) { 
 	PUT(HDRP(bp), PACK(asize, 1));
@@ -482,22 +480,30 @@ static void place(void *bp, size_t asize)
 static void *find_fit(size_t asize, int index){
 	
 	char *addr;
-	void *free = &fblocks[index]; //this and previous line used to be void *
-	int check;
-	if(DEBUG){printf("fblocks[%i]: %08x\n", index, GET(free)); fflush(stdout);}
+	void *free = fblocks[index]; //this and previous line used to be void *
+	void *check;
+	checkheap(1);fflush(stdout);
+	if(DEBUG){printf("Find Fit\n", index, free); fflush(stdout);}
 	
-	check = GET(free);
+	check = free;
 	if (free != 0) 	/* Check if this free block exists */
 		{
 			int whatsup = GET_SIZE(HDRP(free));
 			/* See if block is not the last free one and is large enough */
 			if (GET(NEXT_FREE(free)) != 0xDEADBEEF && asize <= GET_SIZE(HDRP(free)) ) //DEADBEEF is our terminator
 			{
-				if(DEBUG){printf("Saving: %p\n", GET(free)); fflush(stdout);}
-				addr = (char *)free; //save the address we want to return
+				if(DEBUG){printf("Not first block in list: %p\n", free); fflush(stdout);}
+				addr = free; //save the address we want to return
 				if(DEBUG){printf("addr is: %p\n", addr);}
 				deleteFromList(free);
 				fblocks[index] = (char *)GET(NEXT_FREE(free)); //make [index] point to former list item #2
+			}
+			else if (GET(NEXT_FREE(free)) == 0xDEADBEEF && asize <= GET_SIZE(HDRP(free)))
+			{
+				if(DEBUG){printf("First block in list: %p\n", free); fflush(stdout);}
+				addr = free; //save the address we want to return
+				if(DEBUG){printf("addr is: %p\n", addr);}
+				fblocks[index] = 0x00000000;
 			}
 			else if(index < 4) //look in the next biggest size available
 			{
@@ -505,15 +511,6 @@ static void *find_fit(size_t asize, int index){
 				addr = find_fit(asize, index + 1);
 			}
 			else if (asize > GET_SIZE(HDRP(free))) return; //nothing big enough in the list :(
-			else
-			{
-				if(DEBUG){printf("in the else\n"); fflush(stdout);}
-				if(DEBUG){printf("Saving: %p\n", GET(free)); fflush(stdout);}
-				addr = free; //save the address we want to return
-				if(DEBUG){printf("addr is: %p\n", addr);}
-				deleteFromList(free);
-				fblocks[index] = 0x00000000;
-			}
 		return addr;
 		}
 		/* Check for block available in a bigger list */
@@ -526,8 +523,10 @@ static void *find_fit(size_t asize, int index){
 
 void deleteFromList(void *bp)
 {
-	void prev = GET(PREV_FREE(bp));
-	PUT(NEXT_FREE(prev)), 0xDEADBEEF)
+	printf("Delete from list %p\n", bp); fflush(stdout);
+	void* prev = (char *)GET(PREV_FREE(bp));
+	PUT(NEXT_FREE(prev), 0xDEADBEEF);
+	printlist();
 }
 
 //static void *find_fit(size_t asize)
@@ -627,7 +626,7 @@ void printlist(void) {
 		if (fblocks[i] != 0) printf("check - %p\n", GET(NEXT_FREE(fblocks[i]))); fflush(stdout);
 		while(fblocks[i] != 0 && GET(NEXT_FREE(fblocks[i])) != 0xDEADBEEF) {
 			printfreeblock(fblocks[i]);
-			fblocks[i] = GET(NEXT_FREE(fblocks[i]));
+			fblocks[i] = (char *)GET(NEXT_FREE(fblocks[i]));
 			//if (GET(NEXT_FREE(fblocks[i])) == 0xDEADBEEF) {
 			//printf("YOLO\n");fflush(stdout);
 			//break;
