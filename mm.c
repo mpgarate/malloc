@@ -161,7 +161,7 @@ void *mm_malloc(size_t size)
 
     size_t asize;      /* Adjusted block size */
     size_t extendsize; /* Amount to extend heap if no fit */
-    char *bp;      
+    void *bp;     
 
 /* $end mmmalloc */
     if (heap_listp == 0){
@@ -200,7 +200,9 @@ void *mm_malloc(size_t size)
 	
     /* Search the seg list for a fit */
 		//if(PRINTITALL){printf("Calling find_fit(%d, %d)\n", asize, index); fflush(stdout);}
-		if ((bp = find_fit(asize, index)) != NULL) { 
+		bp = NULL;
+		bp = find_fit(asize, index);
+		if (bp != NULL) { 
 		if(PRINTITALL){printf("Found a fit!\n"); fflush(stdout);}
 		place(bp, asize);
 		return bp;
@@ -479,7 +481,7 @@ static void place(void *bp, size_t asize)
  */
 static void *find_fit(size_t asize, int index){
 	
-	char *addr;
+	void *addr = NULL;
 	void *free = fblocks[index]; //this and previous line used to be void *
 	void *check;
 	checkheap(1);fflush(stdout);
@@ -518,7 +520,7 @@ static void *find_fit(size_t asize, int index){
 		{
 			return find_fit(asize, index + 1);
 		}
-		return NULL;
+		return addr;
 }
 
 void deleteFromList(void *bp)
