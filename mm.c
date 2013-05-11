@@ -37,7 +37,7 @@ team_t team = {
 /* Basic constants and macros */
 #define WSIZE       4       /* Word and header/footer size (bytes) */ //line:vm:mm:beginconst
 #define DSIZE       8       /* Doubleword size (bytes) */
-#define CHUNKSIZE  (1<<12)  /* Extend heap by this amount (bytes) */  //line:vm:mm:endconst 
+#define CHUNKSIZE  (1<<12)  /* Extend heap by this amount (bytes) */  //This equals 4096
 
 #define MAX(x, y) ((x) > (y)? (x) : (y))  
 
@@ -81,6 +81,7 @@ void doAssert(int c)
 
 /* Global variables */
 static char *heap_listp = 0;  /* Pointer to first block */  
+static char *heap_lastp = 0;  /* Pointer to last block */  
 static void **fblocks;
 
 /* Function prototypes for internal helper routines */
@@ -210,16 +211,42 @@ void *mm_malloc(size_t size)
 
     /* No fit found. Get more memory and place the block */
 	
-    extendsize = MAX(asize,CHUNKSIZE);
+	/* Save some space if last block is free! */
+	/* This might actually be slowing us down in the long run */
+/**	if(GET_ALLOC(HDRP(heap_listp)))
+	{
+		size_t lastsize = 0;
+		lastsize = (unsigned int *)GET_SIZE(HDRP(heap_listp));
+		asize = asize - extendsize; 
+		extendsize = MAX(asize, CHUNKSIZE);
+		extendsize = extendsize-lastsize; 
+	}
+	*/
+	
+	
+	extendsize = MAX(asize, CHUNKSIZE);
 	checkheap(1);
     if ((bp = extend_heap(extendsize/WSIZE)) == NULL)
 	return NULL;
 	if(PRINTITALL){printf("Extended heap by %d\n", (extendsize)); fflush(stdout);}
 	checkheap(1);
-	if(PRINTITALL){printf("Calling place (%p, %d)\n", bp, asize); fflush(stdout);}
-    place(bp, asize); 
+	
+/*	int prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
+	
+	if(PRINTITALL){printf("Got alloc: %d\n", prev_alloc); fflush(stdout);}
+	void* last_block = GET(HDRP(PREV_BLKP(bp))); //fix me
+	
+	if(PRINTITALL){printf("deleteFromList %d\n", GET_ALLOC(HDRP(prev_alloc))); fflush(stdout);}
+	
+	
+	if(!prev_alloc)
+	{
+		if(PRINTITALL){printf("deleteFromList %p\n", last_block); fflush(stdout);}
+		deleteFromList(last_block);
+	}
+*/	if(PRINTITALL){printf("Calling place (%p, %d)\n", bp, asize); fflush(stdout);}
+	place(bp, asize); 
 	if(PRINTITALL){printf("mm_malloc returning %p\n", bp); fflush(stdout);}
-
 	printlist();
     return bp;
 } 
@@ -251,6 +278,10 @@ void mm_free(void *bp)
  *			bytes:			16	24	32	40-64	72-infinity
  */	
 
+ 
+	/* Set header info to free */
+	PUT(HDRP(bp), PACK(size, 0));
+	PUT(FTRP(bp), PACK(size, 0));
 	addToList(size, bp);
 	if(DEBUG){printf("freed block %p\n", bp);}
     coalesce(bp);
@@ -261,9 +292,6 @@ void mm_free(void *bp)
 /* stores the passed value in the header of the last item in fblocks[arrayIndex]*/
 static void addToList(int size, void *bp)
 {
-	/* Set header info to free */
-	PUT(HDRP(bp), PACK(size, 0));
-	PUT(FTRP(bp), PACK(size, 0));
 	
 	int index = 0;
 	if (size > 71) {
@@ -306,7 +334,7 @@ static void addToList(int size, void *bp)
 	if(DEBUG){printf("after loop! %p | %p \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
 	
 	void* lastblock = fb;
-	PUT(NEXT_FREE(fb), (void *)bp);
+	PUT(NEXT_FREE(fb), bp);
 	
 	if(DEBUG){printf("Next: %p Expected: %p \n", GET(NEXT_FREE(fb)), bp); fflush(stdout);}
 	//Assert((void*)GET(NEXT_FREE(fb)) == GET(bp));
@@ -461,17 +489,46 @@ static void *extend_heap(size_t words)
  */
 
  
+ /*	int prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
+	
+	if(PRINTITALL){printf("Got alloc: %d\n", prev_alloc); fflush(stdout);}
+	void* last_block = GET(HDRP(PREV_BLKP(bp))); //fix me
+	
+	if(PRINTITALL){printf("deleteFromList %d\n", GET_ALLOC(HDRP(prev_alloc))); fflush(stdout);}
+	
+	
+	if(!prev_alloc)
+	{
+		if(PRINTITALL){printf("deleteFromList %p\n", last_block); fflush(stdout);}
+		deleteFromList(last_block);
+	}
+*/
+
+//if the previous block is free, we will remove it from the list.  
+ 
 static void place(void *bp, size_t asize)
 {
+	/* Save previous block */
+	void* last_block = GET(HDRP(PREV_BLKP(bp))); //fix me
+	/* Check if previous block is free */
+	int prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
+	if(PRINTITALL){printf("Got alloc_bit: %d\n", prev_alloc); fflush(stdout);}
+	/* Remove it from list if free */
+	if (!prev_alloc)
+	{
+		if(PRINTITALL){printf("deleteFromList %p\n", last_block); fflush(stdout);}
+		deleteFromList(last_block);
+	}
+    
     size_t csize = GET_SIZE(HDRP(bp));
-
-    if ((csize - asize) >= (2*DSIZE)) { 
+	if ((csize - asize) >= (2*DSIZE)) { 
 	PUT(HDRP(bp), PACK(asize, 1));
 	PUT(FTRP(bp), PACK(asize, 1));
 	bp = NEXT_BLKP(bp);
 	PUT(HDRP(bp), PACK(csize-asize, 0));
 	PUT(FTRP(bp), PACK(csize-asize, 0));
 	if(DEBUG){printf("PLACE %u minus %u in list\n", csize, asize);fflush(stdout);}
+	if(DEBUG){printf("Header says: %u\n", GET_SIZE(HDRP(bp)));fflush(stdout);}
 	Assert(csize-asize == GET_SIZE(HDRP(bp)));
 	addToList(csize-asize, bp);
     }
@@ -531,10 +588,11 @@ static void *find_fit(size_t asize, int index){
 
 void deleteFromList(void *bp)
 {
-	printf("Delete from list %p\n", bp); fflush(stdout);
-	void* prev = (char *)GET(PREV_FREE(bp));
+	printlist(); fflush(stdout);
+	printf("Delete from list %p\n", bp); fflush(stdout);	
+	void* prev = (void *)GET(PREV_FREE(bp));
 	PUT(NEXT_FREE(prev), 0xDEADBEEF);
-	printlist();
+	printlist(); fflush(stdout);
 }
 
 //static void *find_fit(size_t asize)
