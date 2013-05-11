@@ -629,15 +629,15 @@ void checkheap(int verbose)
 		 * Loops through the list and checks for overlapping blocks
 		 */ 
 		char* bp2 = bp;
-		printf("Checking against  bp=[%p]:\n", bp);
+		if(PRINTITALL) {printf("Checking against  bp=[%p]:\n", bp);}
 		
 		for (bp2 = heap_listp; GET_SIZE(HDRP(bp2)) > 0; bp2= NEXT_BLKP(bp2)) {
 			//printf("YYY bp = [%p] NEXT_BLKP(bp)= [%p] bp2= [%p] YYY\n", bp, NEXT_BLKP(bp), bp2); fflush(stdout);
 			printf("                 bp2=[%p]\n", bp2);fflush(stdout);
 			
-			size_t bp_size = GET_SIZE(HDRP(bp));
+			//size_t bp_size = GET_SIZE(HDRP(bp));
 			char* bp_next = NEXT_BLKP(bp);
-			size_t bp_next_size = GET_SIZE(HDRP(bp_next));
+			//size_t bp_next_size = GET_SIZE(HDRP(bp_next));
 			
 			if (bp2 > bp && (char*)bp2 < (char*)NEXT_BLKP(bp)) 
 			{ /* We have an overlapping block because:
@@ -645,7 +645,8 @@ void checkheap(int verbose)
 				note that case bp1 = bp2 will be handled correctly because 
 				comparison used is < and > not <= and >=
 				*/
-				printf("                 ERROR: CONFLICTING BLOCKS NOTICED:[%p] and [%p]\n", bp, bp2);	fflush(stdout);
+				if(PRINTITALL){printf("                 "); fflush(stdout);}
+				printf("ERROR: CONFLICTING BLOCKS NOTICED:[%p] and [%p]\n", bp, bp2);	fflush(stdout);
 				/*printf("ERROR: block [addr:%p size:%u nextblock:%p] and block: [addr:%p size:%08x]\n \
 				have a block in the middle: [addr:%p] \n", 
 				bp, bp_size, bp_next,
@@ -656,12 +657,15 @@ void checkheap(int verbose)
 			} else {
 				//printf("Phwew: Blocks addr:[%p] size[%u] and addr:[%p] do not overlap. Thank God.\n",
 				//bp, bp_size, bp2); fflush(stdout);
-				if (bp == bp2) { printf("                 Equality.\n"); } else
-				printf("                 no overlap\n");
-				
+				if (bp == bp2) { 
+					if (PRINTITALL) 
+						{ printf("                 Equality.\n"); } 
+				} else
+				if (PRINTITALL) printf("                 ");
+				printf("no overlap\n");
 			}
 		
-		} printf("End of embedded loop\n");
+		} if(PRINTITALL) {printf("End of embedded loop\n");}
 	}
 
 	/* Check for a bad epilogue header */
