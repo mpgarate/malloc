@@ -609,26 +609,60 @@ void checkheap(int verbose)
     if ((GET_SIZE(HDRP(heap_listp)) != DSIZE) || !GET_ALLOC(HDRP(heap_listp)))
 	printf("Bad prologue header\n");
     checkblock(heap_listp);
-
+	//int blocknum = 1; /*linear block order in list, used to test if blocks are the same*/
 	/* Loop through memory until header is 0 */
     for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-	if (verbose) 
-	    printblock(bp);
-	checkblock(bp);
-	/* Check if two blocks next to each other are free */
-	if(!(GET_ALLOC(HDRP(bp))) && !(GET_ALLOC(HDRP(bp+GET_SIZE(HDRP(bp))))))
-		{
-			printf("Double free block!\n");
-		}
-	if(!(GET_ALLOC(HDRP(bp))) && findList(bp) == -1)
-		{
-			printf("Block %p is not in the free list!\n", bp);
-		}
-	
-    }
-	
-	/* get starting address and length. loop through to make sure that no starting addresses occur in that range */
-
+		
+		if (verbose) 
+			printblock(bp);
+		checkblock(bp);
+		/* Check if two blocks next to each other are free */
+		if(!(GET_ALLOC(HDRP(bp))) && !(GET_ALLOC(HDRP(bp+GET_SIZE(HDRP(bp))))))
+			{
+				printf("Double free block!\n");
+			}
+		if(!(GET_ALLOC(HDRP(bp))) && findList(bp) == -1)
+			{
+				printf("Block %p is not in the free list!\n", bp);
+			}	
+		/* 
+		 * Loops through the list and checks for overlapping blocks
+		 */ 
+		char* bp2 = bp;
+		printf("Checking against  bp=[%p]:\n", bp);
+		
+		for (bp2 = heap_listp; GET_SIZE(HDRP(bp2)) > 0; bp2= NEXT_BLKP(bp2)) {
+			//printf("YYY bp = [%p] NEXT_BLKP(bp)= [%p] bp2= [%p] YYY\n", bp, NEXT_BLKP(bp), bp2); fflush(stdout);
+			printf("                 bp2=[%p]\n", bp2);fflush(stdout);
+			
+			size_t bp_size = GET_SIZE(HDRP(bp));
+			char* bp_next = NEXT_BLKP(bp);
+			size_t bp_next_size = GET_SIZE(HDRP(bp_next));
+			
+			if (bp2 > bp && (char*)bp2 < (char*)NEXT_BLKP(bp)) 
+			{ /* We have an overlapping block because:
+				If bp2 > bp1 and bp2 < bp1.next, then bp2 must lie between the two 
+				note that case bp1 = bp2 will be handled correctly because 
+				comparison used is < and > not <= and >=
+				*/
+				printf("                 ERROR: CONFLICTING BLOCKS NOTICED:[%p] and [%p]\n", bp, bp2);	fflush(stdout);
+				/*printf("ERROR: block [addr:%p size:%u nextblock:%p] and block: [addr:%p size:%08x]\n \
+				have a block in the middle: [addr:%p] \n", 
+				bp, bp_size, bp_next,
+				bp_next, bp_next_size,
+				bp2
+				); fflush(stdout); */
+				exit(1);
+			} else {
+				//printf("Phwew: Blocks addr:[%p] size[%u] and addr:[%p] do not overlap. Thank God.\n",
+				//bp, bp_size, bp2); fflush(stdout);
+				if (bp == bp2) { printf("                 Equality.\n"); } else
+				printf("                 no overlap\n");
+				
+			}
+		
+		} printf("End of embedded loop\n");
+	}
 
 	/* Check for a bad epilogue header */
     if (verbose)
