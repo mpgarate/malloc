@@ -367,7 +367,7 @@ static void *coalesce(void *bp)
     else if (prev_alloc && !next_alloc) {      /* Case 2 */
 		size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
 		PUT(HDRP(bp), PACK(size, 0));
-		PUT(FTRP(bp), PACK(size,0));
+		PUT(FTRP(bp), PACK(size, 0));
     }
 
     else if (!prev_alloc && next_alloc) {      /* Case 3 */
@@ -473,12 +473,23 @@ static void *extend_heap(size_t words)
     if ((long)(bp = mem_sbrk(size)) == -1)  
 	return NULL;                                        //line:vm:mm:endextend
 
+	
+	if (!GET_ALLOC(HDRP(PREV_BLKP(bp))))
+	{
+		deleteFromList(bp);
+	}
+	
     /* Initialize free block header/footer and the epilogue header */
     PUT(HDRP(bp), PACK(size, 0));         /* Free block header */   //line:vm:mm:freeblockhdr
     PUT(FTRP(bp), PACK(size, 0));         /* Free block footer */   //line:vm:mm:freeblockftr
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1)); /* New epilogue header */ //line:vm:mm:newepihdr
 
+		/* check if bp is in list */
+
+	
     /* Coalesce if the previous block was free */
+	
+
     return coalesce(bp);                                          //line:vm:mm:returnblock
 }
 /* $end mmextendheap */
@@ -509,28 +520,42 @@ static void *extend_heap(size_t words)
 static void place(void *bp, size_t asize)
 {
 	/* Save previous block */
-	void* last_block = GET(HDRP(PREV_BLKP(bp))); //fix me
+	//void* last_block = GET(HDRP(PREV_BLKP(bp))); //fix me
 	/* Check if previous block is free */
-	int prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
-	if(PRINTITALL){printf("Got alloc_bit: %d\n", prev_alloc); fflush(stdout);}
+	//int prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
+	//if(PRINTITALL){printf("Got alloc_bit: %d\n", prev_alloc); fflush(stdout);}
 	/* Remove it from list if free */
-	if (!prev_alloc)
-	{
-		if(PRINTITALL){printf("deleteFromList %p\n", last_block); fflush(stdout);}
-		deleteFromList(last_block);
-	}
+	//if (!prev_alloc)
+	//{
+	//	if(PRINTITALL){printf("deleteFromList %p\n", last_block); fflush(stdout);}
+	//	deleteFromList(last_block);
+	//}
+	
+	
     
+	if(DEBUG){printf("BP1 is %p\n", bp);fflush(stdout);}
+	printlist();
     size_t csize = GET_SIZE(HDRP(bp));
 	if ((csize - asize) >= (2*DSIZE)) { 
+	
+	/* check if bp is in list */
+//	if (!GET_ALLOC(HDRP(bp)))
+//	{
+//		deleteFromList(bp);
+//	}
 	PUT(HDRP(bp), PACK(asize, 1));
 	PUT(FTRP(bp), PACK(asize, 1));
+	
 	bp = NEXT_BLKP(bp);
 	PUT(HDRP(bp), PACK(csize-asize, 0));
 	PUT(FTRP(bp), PACK(csize-asize, 0));
 	if(DEBUG){printf("PLACE %u minus %u in list\n", csize, asize);fflush(stdout);}
 	if(DEBUG){printf("Header says: %u\n", GET_SIZE(HDRP(bp)));fflush(stdout);}
 	Assert(csize-asize == GET_SIZE(HDRP(bp)));
+	if(DEBUG){printf("BP2 is %p\n", bp);fflush(stdout);}
 	addToList(csize-asize, bp);
+	
+	printlist();
     }
     else { 
 	PUT(HDRP(bp), PACK(csize, 1));
@@ -588,6 +613,14 @@ static void *find_fit(size_t asize, int index){
 
 void deleteFromList(void *bp)
 {
+	/* If is the only block in list*/
+	if(GET(PREV_FREE(bp)) == 0xDEADBEEF)
+	{	
+		printf("Delete from list %p\n", bp); fflush(stdout);
+		bp = 0x00000000;
+		return;
+	}
+
 	printlist(); fflush(stdout);
 	printf("Delete from list %p\n", bp); fflush(stdout);	
 	void* prev = (void *)GET(PREV_FREE(bp));
