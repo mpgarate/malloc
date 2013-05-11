@@ -6,7 +6,7 @@
  * 
  * Parts based on book code found here: http://csapp.cs.cmu.edu/public/code.html
  */
- 
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -97,7 +97,6 @@ static void addToList(int size, void *bp); //fb stands for Free Block
 void deleteFromList(void *bp);
 void printlist(void);
 static void printfreeblock(void *bp);
-
 
 /* 
  * mm_init - Initialize the memory manager 
@@ -205,15 +204,18 @@ void *mm_malloc(size_t size)
 		if (bp != NULL) { 
 		if(PRINTITALL){printf("Found a fit!\n"); fflush(stdout);}
 		place(bp, asize);
+		if(PRINTITALL){printf("mm_malloc returning %p\n", bp); fflush(stdout);}
 		return bp;
     }
 
     /* No fit found. Get more memory and place the block */
 	
     extendsize = MAX(asize,CHUNKSIZE);
+	checkheap(1);
     if ((bp = extend_heap(extendsize/WSIZE)) == NULL)
 	return NULL;
-	if(PRINTITALL){printf("Extended heap by %d\n", (extendsize/WSIZE)); fflush(stdout);}
+	if(PRINTITALL){printf("Extended heap by %d\n", (extendsize)); fflush(stdout);}
+	checkheap(1);
 	if(PRINTITALL){printf("Calling place (%p, %d)\n", bp, asize); fflush(stdout);}
     place(bp, asize); 
 	if(PRINTITALL){printf("mm_malloc returning %p\n", bp); fflush(stdout);}
@@ -249,9 +251,6 @@ void mm_free(void *bp)
  *			bytes:			16	24	32	40-64	72-infinity
  */	
 
-	
-    PUT(HDRP(bp), PACK(size, 0));
-    PUT(FTRP(bp), PACK(size, 0));
 	addToList(size, bp);
 	if(DEBUG){printf("freed block %p\n", bp);}
     coalesce(bp);
@@ -262,6 +261,10 @@ void mm_free(void *bp)
 /* stores the passed value in the header of the last item in fblocks[arrayIndex]*/
 static void addToList(int size, void *bp)
 {
+	/* Set header info to free */
+	PUT(HDRP(bp), PACK(size, 0));
+	PUT(FTRP(bp), PACK(size, 0));
+	
 	int index = 0;
 	if (size > 71) {
 		index = 4;
@@ -289,7 +292,7 @@ static void addToList(int size, void *bp)
 			PUT(NEXT_FREE(bp), 0xDEADBEEF);
 			//fb = bp; //does this make sense?
 			if(PRINTITALL){printf("Adding to list: %p\n", bp); fflush(stdout);}
-			if(DEBUG){printf("deadbeef: %u \n", GET(NEXT_FREE(bp))); fflush(stdout);}
+			//if(DEBUG){printf("deadbeef: %p \n", GET(NEXT_FREE(bp))); fflush(stdout);}
 			fblocks[index] = bp;
 			return;
 		}
@@ -298,22 +301,21 @@ static void addToList(int size, void *bp)
 	while(GET(NEXT_FREE(fb)) != 0xDEADBEEF)
 	{
 		if(DEBUG){printf("in the loop! %u | %p \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
-		fb = (char *)GET(NEXT_FREE(fb)); //this line increments to the next free block
+		fb = (char *)NEXT_FREE(fb); //this line increments to the next free block
 	}
 	if(DEBUG){printf("after loop! %p | %p \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
 	
-	void * lastblock = &fb;
+	void* lastblock = fb;
+	PUT(NEXT_FREE(fb), (void *)bp);
 	
-	PUT(NEXT_FREE(fb), GET(fb));
+	if(DEBUG){printf("Next: %p Expected: %p \n", GET(NEXT_FREE(fb)), bp); fflush(stdout);}
+	//Assert((void*)GET(NEXT_FREE(fb)) == GET(bp));
 	
-	//if(DEBUG){printf("Next: %p Expected: %p \n", NEXT_FREE(fb), &fb); fflush(stdout);}
-	//Assert(NEXT_FREE(fb) == fb);
-	
-	fb = (char *)NEXT_FREE(fb);
-	PUT(PREV_FREE(lastblock), GET(fb));
+	fb = (void *)GET(NEXT_FREE(fb)); //step forward
+	PUT(PREV_FREE(fb), GET(lastblock));
 	PUT(NEXT_FREE(fb), 0xDEADBEEF);
 	
-	if(DEBUG){printf("deadbeef: %p \n", NEXT_FREE(fb)); fflush(stdout);}
+	//if(DEBUG){printf("deadbeef: %p \n", GET(NEXT_FREE(fb))); fflush(stdout);}
 	
 	//PUT(NEXT_FREE(fb), GET(bp));
 	//fblocks[index] = 0x00000000;
@@ -457,6 +459,8 @@ static void *extend_heap(size_t words)
  * place - Place block of asize bytes at start of free block bp 
  *         and split if remainder would be at least minimum block size
  */
+
+ 
 static void place(void *bp, size_t asize)
 {
     size_t csize = GET_SIZE(HDRP(bp));
@@ -467,12 +471,14 @@ static void place(void *bp, size_t asize)
 	bp = NEXT_BLKP(bp);
 	PUT(HDRP(bp), PACK(csize-asize, 0));
 	PUT(FTRP(bp), PACK(csize-asize, 0));
-	if(DEBUG){printf("PLACE %u minus %u in list\n", csize, asize);}
+	if(DEBUG){printf("PLACE %u minus %u in list\n", csize, asize);fflush(stdout);}
+	Assert(csize-asize == GET_SIZE(HDRP(bp)));
 	addToList(csize-asize, bp);
     }
     else { 
 	PUT(HDRP(bp), PACK(csize, 1));
 	PUT(FTRP(bp), PACK(csize, 1));
+	coalesce(bp);
     }
 }
 
@@ -485,7 +491,7 @@ static void *find_fit(size_t asize, int index){
 	void *free = fblocks[index]; //this and previous line used to be void *
 	void *check;
 	checkheap(1);fflush(stdout);
-	if(DEBUG){printf("Find Fit\n", index, free); fflush(stdout);}
+	if(DEBUG){printf("Find Fit\n"); fflush(stdout);}
 	
 	check = free;
 	if (free != 0) 	/* Check if this free block exists */
@@ -512,7 +518,7 @@ static void *find_fit(size_t asize, int index){
 				if(DEBUG){printf("calling find fit again\n"); fflush(stdout);}
 				addr = find_fit(asize, index + 1);
 			}
-			else if (asize > GET_SIZE(HDRP(free))) return; //nothing big enough in the list :(
+			else if (asize > GET_SIZE(HDRP(free))) return addr; //nothing big enough in the list :(
 		return addr;
 		}
 		/* Check for block available in a bigger list */
@@ -624,16 +630,17 @@ void printlist(void) {
 	for (i=0; i<5; i++)
 	
 	{
+	void* lp = fblocks[i];
 		printf("LIST %d ------------\n", i); fflush(stdout);
-		if (fblocks[i] != 0) printf("check - %p\n", GET(NEXT_FREE(fblocks[i]))); fflush(stdout);
-		while(fblocks[i] != 0 && GET(NEXT_FREE(fblocks[i])) != 0xDEADBEEF) {
-			printfreeblock(fblocks[i]);
-			fblocks[i] = (char *)GET(NEXT_FREE(fblocks[i]));
-			//if (GET(NEXT_FREE(fblocks[i])) == 0xDEADBEEF) {
-			//printf("YOLO\n");fflush(stdout);
-			//break;
-			//}
-			//else break;
+		if (lp != 0) { printf("check - %p\n", GET(NEXT_FREE(lp))); fflush(stdout); }
+		if (lp != 0) {
+				printfreeblock(lp);
+			while(fblocks[i] != 0 && GET(NEXT_FREE(lp)) != 0xDEADBEEF){
+				//lp = (void *)GET(NEXT_FREE(lp));
+				lp = (void *)GET(NEXT_FREE(lp));
+				//PUT(lp, NEXT_FREE(lp));
+				printfreeblock(lp);
+			}
 		}
 		printf("End List ----------\n");
 	}
@@ -661,6 +668,6 @@ static void printfreeblock(void *bp)
 	GET(NEXT_FREE(bp)),
 	GET(PREV_FREE(bp)),
 	fsize, (falloc ? 'a' : 'f')
-	
 	);
+	fflush(stdout);
 }
