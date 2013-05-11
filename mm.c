@@ -35,7 +35,7 @@ team_t team = {
 
 /* $begin mallocmacros */
 /* Basic constants and macros */
-#define WSIZE       4       /* Word and header/footer size (bytes) */ //line:vm:mm:beginconst
+#define WSIZE       4       /* Word and header/footer size (bytes) */
 #define DSIZE       8       /* Doubleword size (bytes) */
 #define CHUNKSIZE  (1<<12)  /* Extend heap by this amount (bytes) */  //This equals 4096
 
@@ -45,20 +45,20 @@ team_t team = {
 #define PACK(size, alloc)  ((size) | (alloc)) //line:vm:mm:pack
 
 /* Read and write a word at address p */
-#define GET(p)       (*(unsigned int *)(p))            //line:vm:mm:get
-#define PUT(p, val)  (*(unsigned int *)(p) = (val))    //line:vm:mm:put
+#define GET(p)       (*(unsigned int *)(p))
+#define PUT(p, val)  (*(unsigned int *)(p) = (val))
 
 /* Read the size and allocated fields from address p */
-#define GET_SIZE(p)  (GET(p) & ~0x7)                   //line:vm:mm:getsize
+#define GET_SIZE(p)  (GET(p) & ~0x7)
 #define GET_ALLOC(p) (GET(p) & 0x1)                    //use 1 for allocated, 0 for free
 
 /* Given block ptr bp, compute address of its header and footer */
 #define HDRP(bp)       ((char *)(bp) - WSIZE)                      //use 1 for allocated, 0 for free
-#define FTRP(bp)       ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE) //line:vm:mm:ftrp
+#define FTRP(bp)       ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE)
 
 /* Given block ptr bp, compute address of next and previous blocks */
-#define NEXT_BLKP(bp)  ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE))) //line:vm:mm:nextblkp
-#define PREV_BLKP(bp)  ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE))) //line:vm:mm:prevblkp
+#define NEXT_BLKP(bp)  ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
+#define PREV_BLKP(bp)  ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
 /* Given block ptr bp, get the next and previous free blocks */
 #define	NEXT_FREE(bp)	(char *)(bp)
@@ -108,7 +108,7 @@ static int findList(void *bp );
 int mm_init(void) 
 {
 	/* Create the initial empty heap */
-    if ((heap_listp = mem_sbrk(12*WSIZE)) == (void *)-1) //line:vm:mm:begininit
+    if ((heap_listp = mem_sbrk(12*WSIZE)) == (void *)-1)
 	return -1;
 	
 	fblocks = (void*)heap_listp;
@@ -126,8 +126,6 @@ int mm_init(void)
     PUT(heap_listp + (3*WSIZE), PACK(0, 1));     /* Epilogue header */
     heap_listp += (2*WSIZE);
 	
-
-	
 	/* Create array of lists to store addresses of free blocks by size */
 	/*
 	 * 			Let's store these free block sizes:
@@ -136,24 +134,15 @@ int mm_init(void)
 	 *			bytes:			16	24	32	40-64	72-infinity
 	 */	
 	 
-	
-    /* Extend the empty heap with a free block of CHUNKSIZE bytes */
-    //if (bp = extend_heap(CHUNKSIZE/WSIZE) == NULL) 
-	//return -1;
-	//if(PRINTITALL){printf("init extended heap by %i\n", CHUNKSIZE/WSIZE);fflush(stdout);}
-//	PUT(HDRP(heap_listp), PACK(1024, 0));
- //   PUT(FTRP(heap_listp), PACK(1024, 0));
-  //  coalesce(heap_listp);
-//	addToList(1024, heap_listp);
     return 0;
 }
-/* $end mminit */
+
 
 /* 
  * mm_malloc - Allocate a block with at least size bytes of payload 
  * Based on book code mm.c
  */
-/* $begin mmmalloc */
+ 
 void *mm_malloc(size_t size) 
 {
 	checkheap(1);fflush(stdout);
@@ -165,11 +154,11 @@ void *mm_malloc(size_t size)
     size_t extendsize; /* Amount to extend heap if no fit */
     void *bp;     
 
-/* $end mmmalloc */
+	
     if (heap_listp == 0){
 	mm_init();
     }
-/* $begin mmmalloc */
+	
     /* Ignore spurious requests */
     if (size == 0)
 	return NULL;
@@ -199,46 +188,34 @@ void *mm_malloc(size_t size)
 		index = 0;
 	}
 	
-	
     /* Search the seg list for a fit */
-		//if(PRINTITALL){printf("Calling find_fit(%d, %d)\n", asize, index); fflush(stdout);}
 		bp = NULL;
 		bp = find_fit(asize, index);
 		if (bp != NULL) { 
-		if(PRINTITALL){printf("Found a fit!\n"); fflush(stdout);}
+		if(PRINTITALL){printf("Found a fit! Too bad it's %p\n", bp); fflush(stdout);}
 		place(bp, asize);
 		if(PRINTITALL){printf("mm_malloc returning %p\n", bp); fflush(stdout);}
+		checkheap(0);fflush(stdout);
 		return bp;
     }
 
     /* No fit found. Get more memory and place the block */
-	
-	/* Save some space if last block is free! */
-	/* This might actually be slowing us down in the long run */
-/**	if(GET_ALLOC(HDRP(heap_listp)))
-	{
-		size_t lastsize = 0;
-		lastsize = (unsigned int *)GET_SIZE(HDRP(heap_listp));
-		asize = asize - extendsize; 
-		extendsize = MAX(asize, CHUNKSIZE);
-		extendsize = extendsize-lastsize; 
-	}
-	*/
 	
 	extendsize = MAX(asize, CHUNKSIZE);
 	checkheap(1);
     if ((bp = extend_heap(extendsize/WSIZE)) == NULL)
 	return NULL;
 	
-
-	
 	if(PRINTITALL){printf("Extended heap by %d\n", (extendsize)); fflush(stdout);}
-	checkheap(1);
-	
+
 	if(PRINTITALL){printf("Calling place (%p, %d)\n", bp, asize); fflush(stdout);}
 	place(bp, asize); 
 	
-
+	if(PRINTITALL){
+		printf("mm_malloc just finished place:\n"); 
+		checkheap(0);
+		fflush(stdout);
+	}
 	
 	if(PRINTITALL){printf("mm_malloc ex. returning %p\n", bp); fflush(stdout);}
 	printlist();
@@ -251,10 +228,10 @@ void *mm_malloc(size_t size)
  */
 void mm_free(void *bp)
 {
+	printf("CHECKHEAP mm_free \n");
 	checkheap(1);	
 	if(PRINTITALL){printf("mm_free called for bp: %p\n", bp); fflush(stdout);}
 	printlist();
-
 	
     if(bp == 0) 
 	return;
@@ -265,21 +242,12 @@ void mm_free(void *bp)
 	mm_init();
     }
 	
-/*
- * 			Let's fill these free block sizes:
- *			array[x]		0	1	2	3		4
- *			double words:	2	3	4	5-8		9+
- *			bytes:			16	24	32	40-64	72-infinity
- */	
-
- 
 	/* Set header info to free */
 	PUT(HDRP(bp), PACK(size, 0));
 	PUT(FTRP(bp), PACK(size, 0));
 	addToList(size, bp);
 	if(DEBUG){printf("freed block %p\n", bp);}
     coalesce(bp);
-	
 }
 
 
@@ -307,22 +275,20 @@ static void addToList(int size, void *bp)
 		coalesce(bp); //this might not be right
 	}
 	void *fb = fblocks[index];
-		if (fb == 0x00000000) //nothing in this list yet
+	
+		/* Check if list is empty */
+		if (fb == 0x00000000)
 		{
 			PUT(PREV_FREE(bp), 0xDEADBEEF);
 			PUT(NEXT_FREE(bp), 0xDEADBEEF);
-			//fb = bp; //does this make sense?
 			if(PRINTITALL){printf("Adding to list: %p\n", bp); fflush(stdout);}
-			//if(DEBUG){printf("deadbeef: %p \n", GET(NEXT_FREE(bp))); fflush(stdout);}
 			fblocks[index] = bp;
 			return;
 		}
-	//PUT(NEXT_FREE(bp), 0xDEADBEEF);
-	
 	
 	while(GET(NEXT_FREE(fb)) != 0xDEADBEEF)
 	{
-		if(DEBUG){printf("in the loop! %u | %p \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
+		if(DEBUG){printf("in the loop! %p | %p \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
 		fb = (void *)GET(NEXT_FREE(fb)); //this line increments to the next free block
 	}
 	if(DEBUG){printf("after loop! %p | %p \n", fb, GET(NEXT_FREE(fb))); fflush(stdout);}
@@ -332,16 +298,10 @@ static void addToList(int size, void *bp)
 	PUT(NEXT_FREE(fb), bp);
 	
 	if(DEBUG){printf("Next: %p Expected: %p fb: %p \n", GET(NEXT_FREE(fb)), bp, fb); fflush(stdout);}
-	//Assert((void*)GET(NEXT_FREE(fb)) == GET(bp));
-	
+
 	fb = (void *)GET(NEXT_FREE(fb)); //step forward
 	PUT(PREV_FREE(fb), GET(lastfree));
 	PUT(NEXT_FREE(fb), 0xDEADBEEF);
-	
-	//if(DEBUG){printf("deadbeef: %p \n", GET(NEXT_FREE(fb))); fflush(stdout);}
-	
-	//PUT(NEXT_FREE(fb), GET(bp));
-	//fblocks[index] = 0x00000000;
 }
 
 
@@ -375,13 +335,12 @@ static void *coalesce(void *bp)
     else {                                     /* Case 4 */
 	size += GET_SIZE(HDRP(PREV_BLKP(bp))) + 
 	    GET_SIZE(FTRP(NEXT_BLKP(bp)));
-	PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
-	PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
-	bp = PREV_BLKP(bp);
+		PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
+		PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
+		bp = PREV_BLKP(bp);
     }
     return bp;
 }
-/* $end mmfree */
 
 /*
  * mm_realloc - Naive implementation of realloc
@@ -447,7 +406,7 @@ Heap Consistency Checker
  */
 void mm_check(int verbose)  
 {
-
+	
 }
 
 /* 
@@ -457,32 +416,25 @@ void mm_check(int verbose)
 /* 
  * extend_heap - Extend heap with free block and return its block pointer
  */
-/* $begin mmextendheap */
+ 
 static void *extend_heap(size_t words) 
 {
     char *bp;
     size_t size;
 
     /* Allocate an even number of words to maintain alignment */
-    size = (words % 2) ? (words+1) * WSIZE : words * WSIZE; //line:vm:mm:beginextend
+    size = (words % 2) ? (words+1) * WSIZE : words * WSIZE;
     if ((long)(bp = mem_sbrk(size)) == -1)  
-	return NULL;                                        //line:vm:mm:endextend
+	return NULL;
 
-	
+	/* Initialize free block header/footer and the epilogue header */
+    PUT(HDRP(bp), PACK(size, 0));         /* Free block header */
+    PUT(FTRP(bp), PACK(size, 0));         /* Free block footer */
+    PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1)); /* New epilogue header */
 
-	
-    /* Initialize free block header/footer and the epilogue header */
-    PUT(HDRP(bp), PACK(size, 0));         /* Free block header */   //line:vm:mm:freeblockhdr
-    PUT(FTRP(bp), PACK(size, 0));         /* Free block footer */   //line:vm:mm:freeblockftr
-    PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1)); /* New epilogue header */ //line:vm:mm:newepihdr
-
-		/* check if bp is in list */
-
-	
     /* Coalesce if the previous block was free */
-    return coalesce(bp);                                          //line:vm:mm:returnblock
+    return coalesce(bp);
 }
-/* $end mmextendheap */
 
 /* 
  * place - Place block of asize bytes at start of free block bp 
@@ -491,13 +443,14 @@ static void *extend_heap(size_t words)
  
 static void place(void *bp, size_t asize)
 {
-	if(DEBUG){printf("BP1 is %p\n", bp);fflush(stdout);}
-	printlist();
+	if(DEBUG){printf("Place: BP1 is %p\n", bp);fflush(stdout);}
+	checkheap(0);
     size_t csize = GET_SIZE(HDRP(bp));
 	if ((csize - asize) >= (2*DSIZE)) { 
 	
 	if(DEBUG){printf("Place before delete bp\n");fflush(stdout);
-	printlist();}
+	//printlist();
+	}
 
 	int index = findList(bp);
 	if (index != -1)
@@ -506,23 +459,8 @@ static void place(void *bp, size_t asize)
 		deleteFromList(bp, index);
 	}
 	
-/*	size_t alloc = GET_ALLOC(HDRP(bp));
-	if(PRINTITALL){printf("alloc_var: %d\n", alloc); fflush(stdout);}
-	if (alloc)
-	{	
-		if(PRINTITALL){printf("calling deleteFromList\n"); fflush(stdout);}
-		deleteFromList(PREV_BLKP(bp));
-	}
-	*/
-	
-	if(DEBUG){printf("Place before alloc bits \n");fflush(stdout);
-	printlist();}
-	
 	PUT(HDRP(bp), PACK(asize, 1));
 	PUT(FTRP(bp), PACK(asize, 1));
-	
-	if(DEBUG){printf("Place after alloc bits \n");fflush(stdout);
-	printlist();}
 	
 	bp = NEXT_BLKP(bp);
 	PUT(HDRP(bp), PACK(csize-asize, 0));
@@ -533,7 +471,7 @@ static void place(void *bp, size_t asize)
 	if(DEBUG){printf("BP2 is %p\n", bp);fflush(stdout);}
 	addToList(csize-asize, bp);
 	
-	printlist();
+	//printlist();
     }
     else { 
 	PUT(HDRP(bp), PACK(csize, 1));
@@ -564,13 +502,14 @@ static void *find_fit(size_t asize, int index){
 				addr = free; //save the address we want to return
 				if(DEBUG){printf("addr is: %p\n", addr);}
 				deleteFromList(free, index);
-				fblocks[index] = (char *)GET(NEXT_FREE(free)); //make [index] point to former list item #2
+				//fblocks[index] = (void *)GET(NEXT_FREE(free)); //make [index] point to former list item #2
+				//PUT(PREV_FREE(free), 0xDEADBEEF);
 			}
 			else if (GET(NEXT_FREE(free)) == 0xDEADBEEF && asize <= GET_SIZE(HDRP(free)))
 			{
 				if(DEBUG){printf("First block in list: %p\n", free); fflush(stdout);}
 				addr = free; //save the address we want to return
-				if(DEBUG){printf("addr is: %p\n", addr);}
+				if(DEBUG){printf("addr is: %p\n", addr); fflush(stdout);}
 				fblocks[index] = 0x00000000;
 			}
 			else if(index < 4) //look in the next biggest size available
@@ -594,21 +533,18 @@ void deleteFromList(void *bp, int index)
 	/* If is the only block in list*/
 	if(GET(NEXT_FREE(bp)) == 0xDEADBEEF && GET(PREV_FREE(bp)) == 0xDEADBEEF)
 	{	
-		printf("Delete from list 1 %p\n", bp); fflush(stdout);
+		if(DEBUG){printf("Delete from list 1 %p\n", bp); fflush(stdout);}
+		
 		fblocks[index] = 0x00000000;
-		printf("fblocks[%d]: %p\n", index, fblocks[index]); fflush(stdout);
-		printlist(); fflush(stdout);
+		if(DEBUG){printf("fblocks[%d]: %p\n", index, fblocks[index]); fflush(stdout);}
 		return;
 	}
 	else if (GET_SIZE(HDRP(bp)) == 0) return;
-	//PREV_BLKP
-	printlist(); fflush(stdout);
-	printf("Delete from list 2 %p\n", bp); fflush(stdout);	
+	if(DEBUG){printf("Delete from list 2 %p\n", bp); fflush(stdout);}
 	void* prev = (void *)GET(PREV_FREE(bp));
-	printf("prev: %p\n", prev); fflush(stdout);	
-	printf("bp: %p\n", bp); fflush(stdout);	
+	if(DEBUG){printf("prev: %p\n", prev); fflush(stdout);}	
+	if(DEBUG){printf("bp: %p\n", bp); fflush(stdout);}
 	PUT(NEXT_FREE(prev), 0xDEADBEEF);
-	printlist(); fflush(stdout);
 
 }
 
@@ -684,6 +620,11 @@ void checkheap(int verbose)
 		{
 			printf("Double free block!\n");
 		}
+	if(!(GET_ALLOC(HDRP(bp))) && findList(bp) == -1)
+		{
+			printf("Block %p is not in the free list!\n", bp);
+		}
+	
     }
 	
 	/* get starting address and length. loop through to make sure that no starting addresses occur in that range */
@@ -699,20 +640,16 @@ void checkheap(int verbose)
 
 
 void printlist(void) {
-	
-	/* End signal is 0xdeadbeef  */
 	int i = 0;
-	for (i=0; i<5; i++)
 	
+	for (i=0; i<5; i++)
 	{
-	void* lp = fblocks[i];
+		void* lp = fblocks[i];
 		printf("LIST %d ------------\n", i); fflush(stdout);
 		if (lp != 0) {
-				printfreeblock(lp, i);
-			while(lp != 0x00000000 && GET(NEXT_FREE(lp)) != 0xDEADBEEF){
-				//lp = (void *)GET(NEXT_FREE(lp));
+			printfreeblock(lp, i);
+				while(lp != 0x00000000 && GET(NEXT_FREE(lp)) != 0xDEADBEEF){
 				lp = (void *)GET(NEXT_FREE(lp));
-				//PUT(lp, NEXT_FREE(lp));
 				printfreeblock(lp, i);
 			}
 		}
@@ -748,26 +685,19 @@ static void printfreeblock(void *bp, int index)
 }
 
 static int findList(void *bp ) {
-	printf("Searching through the lists\n");
 	int i;
 	for (i = 5; i > -1 ; i--)
 	{
 		void* lp = fblocks[i];
-		//if (lp != 0) { printf("check - %p\n", GET(NEXT_FREE(lp))); fflush(stdout); }
 		if (lp != 0) {
-			//printf("lp:");
-			//printfreeblock(lp, i);
-			//printf("bp:");			
-			//printfreeblock(bp, i);
-			if (bp == lp) {
-				/* We have found a match */
+			if (bp == lp) { 		/* We have found a match */
 				return i;
 			}
 			while(fblocks[i] != 0 && GET(NEXT_FREE(lp)) != 0xDEADBEEF){
 				lp = (void *)GET(NEXT_FREE(lp));
-				if (bp == lp) {
-					/* We have found a match */
-					return i;}
+				if (bp == lp) { 	/* We have found a match */
+					return i;
+				}
 	}}}
 	return -1;
 }
