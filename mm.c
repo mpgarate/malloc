@@ -65,7 +65,7 @@ team_t team = {
 
 
 /* DEBUG: 1 if true, 0 if false. Will say more things if true.*/
-#define DEBUG	1
+#define DEBUG	0
 
 /* Call heapchecker */
 #define	HC() {if(DEBUG)mm_check(0);fflush(stdout);}
@@ -428,10 +428,15 @@ static int list_add(void* bp)
 	else
 	{
 		SAY0("DEBUG: list_add: list wasn't empty; inserting into list\n");
-		void* old_next = NEXT_FREE(free_p);
-		PUT(NEXT_FREE(free_p), bp);
+		
+		void* old_next = free_p;
+		PUT(PREV_FREE(old_next), bp);
 		PUT(NEXT_FREE(bp), old_next);
-		PUT(PREV_FREE(bp), free_p);
+		free_p = bp;
+		
+		//PUT(free_p, bp);
+		//PUT(NEXT_FREE(bp), old_next);
+		//PUT(PREV_FREE(bp), free_p);
 		free_lastp = old_next;
 		SAY0("DEBUG: list_add: returning 1! Hooray!\n");
 		PL()
@@ -460,8 +465,10 @@ static int list_rm(void* bp)
 
 	if(GET(NEXT_FREE(bp)) == 0)
 	{
-		SAY("bp was only one in list. Removing. \n");
-		free_p == NULL;
+		SAY("DEBUG: list_rm: bp was only one in list. Removing. \n");
+		free_p = NULL;
+		SAY1("DEBUG: list_rm: free_p should be nil: %p\n", free_p);
+		PL()
 		return 1;
 	}
 	
@@ -520,7 +527,7 @@ static void *find_fit(size_t asize)
 {
     /* First fit search */
     void *bp;
-    for (bp = NEXT_FREE(free_p); bp != NULL; bp = NEXT_FREE(bp)) {
+    for (bp = NEXT_FREE(free_p); bp != NULL; bp = GET(NEXT_FREE(bp))) {
 		if (asize <= GET_SIZE(HDRP(bp))) {
 			SAY4("DEBUG: find_fit: found for asize: %i, %p: %i, %i\n", asize, bp, GET_SIZE(HDRP(bp)), GET_ALLOC(HDRP(bp)));
 			if (list_rm(bp)) SAY("We removed it\n");
@@ -533,9 +540,8 @@ static void *find_fit(size_t asize)
 static void printlist()
 {
 	void *bp = free_p;
-	SAY1("Printing Free List ------------- %p\n", bp);
+	SAY1("DEBUG:       Printing Free List ------------- %p\n", bp);
     for (bp = free_p; bp != NULL; bp = GET(NEXT_FREE(bp))) {
-		SAY1("Got here %p\n", bp);
 			printblock(bp);
 		}
 
@@ -558,7 +564,7 @@ static void printblock(void *bp)
 	return;
     }
 
-	SAY7("---- | %p: header: [%i:%c] footer: [%i:%c]\n---- | n:%p p:%p\n", bp, 
+	SAY7("DEBUG: ---- | %p: header: [%i:%c] footer: [%i:%c]\nDEBUG:      | n:%p p:%p\n", bp, 
 	hsize, (halloc ? 'a' : 'f'), 
 	fsize, (falloc ? 'a' : 'f'),
 	next,
