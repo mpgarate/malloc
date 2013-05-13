@@ -124,7 +124,8 @@ static int list_rm(void* bp);
 //static int combine(void* bp, void* bp2);
 /* Print the list */
 static void printlist();
-
+/* Check if block is in the list */
+static int list_search(void* bp);
 
 /* Our global variables */
 
@@ -190,7 +191,7 @@ void *mm_malloc(size_t size)
 	asize = 2*DSIZE;
     else
 	asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE);
-
+	
 	SAY0("DEBUG: mm_malloc: calling find_fit\n");
     /* Search the free list for a fit */
     if ((bp = find_fit(asize)) != NULL) {
@@ -207,6 +208,7 @@ void *mm_malloc(size_t size)
 	SAY2("DEBUG: mm_malloc calling place(%p, %i)\n", bp, asize);
     place(bp, asize);
 	SAY1("DEBUG: mm_malloc returning %p\n", bp);
+	HC()
     return bp;
 } 
 
@@ -216,6 +218,7 @@ void *mm_malloc(size_t size)
  */
 void mm_free(void *bp)
 {
+	HC()
     if(bp == 0) 
 	return;
 
@@ -229,6 +232,7 @@ void mm_free(void *bp)
 	
 	/* TODO: addToList is called from within coalesce */
     coalesce(bp);
+	HC()
 }
 
 /*
@@ -349,9 +353,18 @@ void mm_check(int verbose)
     checkblock(heap_listp);
 
     for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-	if (verbose) 
-	    printblock(bp);
-	checkblock(bp);
+	
+		if (verbose) 
+			printblock(bp);
+		checkblock(bp);
+		
+		/* Check if two blocks next to each other are free */
+		if(!(GET_ALLOC(HDRP(bp))) && !(GET_ALLOC(HDRP(bp+GET_SIZE(HDRP(bp))))))
+			{
+				printf("Double free block!\n");
+			}
+		SAY2("DEBUG: mm_check: GET_ALLOC is %i, list_search is %i\n", (GET_ALLOC(HDRP(bp))), list_search(bp));
+		Assert((GET_ALLOC(HDRP(bp))) && list_search(bp) == 1);
     }
 
     if (verbose)
@@ -423,7 +436,7 @@ static int list_add(void* bp)
 		SAY("DEBUG: list_add printing before return\n");
 		PL()
 		SAY0("DEBUG: list_add: returning 1! Hooray!\n");
-		SAY2("Should be true: %i | %p\n", GET_PTR(NEXT_FREE(bp)) == 0, GET_PTR(NEXT_FREE(bp)));
+		SAY2("Should be true: %i | %p\n", GET(NEXT_FREE(bp)) == 0, GET(NEXT_FREE(bp)));
 		return 1;
 	}
 	else
@@ -548,21 +561,55 @@ static void *find_fit(size_t asize)
 
 {
  /* Best fit search */
+ 
+	/* TODO: make this search work! */
     void *bp;
 	void *best = NULL; /* return NULL if none found */
-	size_t best_size = (size_t)-1;	/* Gets the max size of size_t */
-    for (bp = NEXT_FREE(free_p); bp != NULL && GET_SIZE(HDRP(bp)) < heap_lastp; bp = GET(NEXT_FREE(bp))) {
-		if (asize == GET_SIZE(HDRP(bp))) {
+	size_t best_size;	/* Gets the max size of size_t */
+	
+	while(bp != NULL)
+	{
+		if (asize == GET_SIZE(HDRP(bp)))
+		{
 			return bp;		/* If they are equal, this fit is the best */
 		}
-		else if(asize < GET_SIZE(HDRP(bp)) && GET_SIZE(HDRP(bp)) < best_size )
+		else if(asize < GET_SIZE(HDRP(bp) && GET_SIZE(HDRP(bp)) < best_size))
 		{
 			best_size = GET_SIZE(HDRP(bp));
 			best = bp;
 		}
-    }
+		bp = (void *)GET(NEXT_FREE(bp));
+	}
 	return best;
 }
+
+
+static int list_search(void* bp)
+{
+	int found = 0;
+	void * lp = free_p;
+	
+	SAY1("DEBUG: list_search: lp is %p \n", lp);
+	
+	
+	if (bp == lp) { 		/* We have found a match */
+				return 1;
+			}
+	if (bp == NULL)
+	{
+		SAY1("DEBUG: loop: lp was null \n", lp);
+		return 0; /* not in the list */
+	}
+	SAY1("DEBUG: loop: lpget is %p \n", NEXT_FREE(lp));
+		while(NEXT_FREE(lp) != 0){
+				SAY1("DEBUG: list_search: looping, lp is %p \n", lp);
+				lp = (void *)GET(NEXT_FREE(lp));
+				if (bp == lp) { 	/* We have found a match */
+					return 1;
+				}
+			}
+		return 0;
+	}
 
 static void printlist()
 {
