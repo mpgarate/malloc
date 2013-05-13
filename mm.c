@@ -60,18 +60,19 @@ team_t team = {
 #define PREV_FREE(bp) 	(void *)(bp + WSIZE)
 
 /* Set and retrieve free pointers */
-#define SET(p, val)		(*(unsigned int *)(p) = val)
+#define SET(p, val)		(*(unsigned int *)(p) = (unsigned int)val)
 #define GET_PTR(p)		(void *)(p)
 
 
 /* DEBUG: 1 if true, 0 if false. Will say more things if true.*/
-#define DEBUG	0
+#define DEBUG	1
 
 /* Call heapchecker */
 #define	HC() {if(DEBUG)mm_check(0);fflush(stdout);}
 
 
 /* Epic macros for SAY */
+#define SAY(fmt)		SAY0(fmt)
 #define SAY0(fmt)		{if(DEBUG){printf(fmt); fflush(stdout);}}
 #define SAY1(fmt,parm1)	{if(DEBUG){printf(fmt,parm1); fflush(stdout);}}
 #define SAY2(fmt,parm1,parm2)	{if(DEBUG){printf(fmt,parm1,parm2); fflush(stdout);}}
@@ -187,7 +188,7 @@ void *mm_malloc(size_t size)
     else
 	asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE);
 
-	SAY0("DEBUG: mm_init: calling find_fit\n");
+	SAY0("DEBUG: mm_malloc: calling find_fit\n");
     /* Search the free list for a fit */
     if ((bp = find_fit(asize)) != NULL) {
 	place(bp, asize);
@@ -239,9 +240,9 @@ static void *coalesce(void *bp)
 	/* Check if free AND not from extend heap, and then remove from list. This lets us call it from both mm_free, extend_heap, and place */
 	
 	/* Get NEXT_FREE as an unsigned int so that we can compare it to DEADBEEF */
-	if(!GET_ALLOC(FTRP(bp)) && GET(NEXT_FREE(bp)) != 0xDEADBEEF)
+	if(!GET_ALLOC(FTRP(bp)))
 	{
-		SAY1("DEBUG: coalesce: 0xDEADBEEF found; removing bp:[%p] from list",bp)
+		SAY1("DEBUG: coalesce: ERROR: tried to remove allocated block bp:[%p] from list\n",bp)
 		list_rm(bp);
 	}
 	
@@ -377,12 +378,6 @@ static void *extend_heap(size_t words)
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1)); /* New epilogue header */ 
 
 	SAY0("DEBUG: extend_heap: free block initialized; epilogue set\n");
-	/* Add something to block here in the get_next field 
-			that coalesce can check for to know that it came 
-			from extend_heap. Something like 0xDEADBEEF
-	*/
-	
-	SET(NEXT_FREE(bp), 0xDEADBEEF);
 	SAY0("DEBUG: extend_heap: calling coalesce\n");
     /* Coalesce if the previous block was free */
     return coalesce(bp);
@@ -420,7 +415,7 @@ static int list_add(void* bp)
 	}
 	else
 	{
-		SAY0("DEBUG: list_add: list wasn't empty; inserting into list");
+		SAY0("DEBUG: list_add: list wasn't empty; inserting into list\n");
 		void* old_next = GET_PTR(NEXT_FREE(free_p));
 		SET(NEXT_FREE(free_p), bp);
 		SET(NEXT_FREE(bp), old_next);
@@ -432,21 +427,6 @@ static int list_add(void* bp)
 	SAY0("DEBUG: list_add: returning 0 :-(\n");
 	return 0;
 }
-		/* This is the start of an alternate way that places a block at the end 
-			//Copy the start pointer to a counter pointer 
-		void* cp = free_p;
-			//Loop through list until on the last free block
-		while (NEXT_FREE(cp) != NULL)
-		{
-			cp = GET(NEXT_FREE(cp));
-		}
-		SET(NEXT_FREE(cp), bp);
-		cp = GET(NEXT_FREE(cp));
-		free_lastp = bp;
-		SET(NEXT_FREE(free_p), NULL);
-		SET(PREV_FREE(free_p), NULL);
-		return 1;
-		*/
 
 
 /* Delete a block from the free list
@@ -457,20 +437,19 @@ static int list_rm(void* bp)
 {	/* If list is empty */
 	if (free_p == NULL)
 	{
-		return 1;
+		return 0;
 	}
 	/* Insert at beginning of list */
 
 	void* next = GET_PTR(NEXT_FREE(bp));
 	void* prev = GET_PTR(PREV_FREE(bp));
-	
 	SET(PREV_FREE(next), GET(prev));
 	SET(NEXT_FREE(prev), GET(next));
 	
 	SET(PREV_FREE(bp), NULL);
 	SET(NEXT_FREE(bp), NULL);
 	
-	return 0;
+	return 1;
 }
 /* 
  * place - Place block of asize bytes at start of free block bp 
@@ -480,9 +459,12 @@ static int list_rm(void* bp)
 static void place(void *bp, size_t asize)
 
 {
-    size_t csize = GET_SIZE(HDRP(bp));   
+    size_t csize = GET_SIZE(HDRP(bp));
 
-    if ((csize - asize) >= (2*DSIZE)) { 
+	SAY1("DEBUG: place: calling list_rm on %p\n", bp);
+	
+	list_rm(bp);
+    if ((csize - asize) >= (2*DSIZE)) {
 	PUT(HDRP(bp), PACK(asize, 1));
 	PUT(FTRP(bp), PACK(asize, 1));
 	bp = NEXT_BLKP(bp);
@@ -510,11 +492,12 @@ static void *find_fit(size_t asize)
 {
     /* First fit search */
     void *bp;
-
-    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-	if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
-	    return bp;
-	}
+    for (bp = GET_PTR(NEXT_FREE(free_p)); NEXT_FREE(bp) != NULL; bp = GET_PTR(NEXT_FREE(bp))) {
+		if (asize <= GET_SIZE(HDRP(bp))) {
+			SAY3("We got one: asize: %i, %p: %i\n", asize, bp, GET_SIZE(HDRP(bp)) );
+			if (list_rm(bp)) SAY("We removed it\n");
+			return bp;
+		}
     }
     return NULL; /* No fit */
 }
