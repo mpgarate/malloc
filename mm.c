@@ -56,7 +56,7 @@ team_t team = {
 #define PREV_BLKP(bp)  ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
 /*  macros for free block pointers */
-#define NEXT_FREE(bp)	(bp)
+#define NEXT_FREE(bp)	(void *)(bp)
 #define PREV_FREE(bp) 	(void *)(bp + WSIZE)
 
 /* Set and retrieve free pointers */
@@ -387,15 +387,23 @@ static int list_add(void* bp)
 	{
 		free_p = bp;
 		free_lastp = bp;
-		SET(NEXT_FREE(free_p), NULL);
-		SET(PREV_FREE(free_p), NULL);
+		SET(NEXT_FREE(free_p), GET(NULL));
+		SET(PREV_FREE(free_p), GET(NULL));
 		return 1;
 	}
 	else
 	{
-		/* Copy the start pointer to a counter pointer */
+		void* old_next = GET(NEXT_FREE(free_p));
+		SET(NEXT_FREE(free_p), bp);
+		SET(NEXT_FREE(bp), old_next);
+		SET(PREV_FREE(bp), free_p);
+		free_lastp = old_next;
+		return 1;
+		
+		/* This is the start of an alternate way that places a block at the end 
+			//Copy the start pointer to a counter pointer 
 		void* cp = free_p;
-		/* Loop through list until on the last free block */ 
+			//Loop through list until on the last free block
 		while (NEXT_FREE(cp) != NULL)
 		{
 			cp = GET(NEXT_FREE(cp));
@@ -406,6 +414,7 @@ static int list_add(void* bp)
 		SET(NEXT_FREE(free_p), NULL);
 		SET(PREV_FREE(free_p), NULL);
 		return 1;
+		*/
 	}
 	
 	return 0;
