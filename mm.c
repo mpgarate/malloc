@@ -66,17 +66,16 @@ team_t team = {
 /* DEBUG: 1 if true, 0 if false. Will say more things if true.*/
 #define DEBUG	1
 
-
 /* Epic macros for SAY */
 #define SAY0(fmt)		{if(DEBUG){printf(fmt); fflush(stdout);}}
-#define SAY1(fmt,parm1)	{if(DEBUG){printf(fmt); fflush(stdout);}}
-#define SAY2(fmt,parm1,parm2)	{if(DEBUG){printf(fmt,parm2); fflush(stdout);}}
-#define SAY3(fmt,parm1,parm2,parm3)	{if(DEBUG){printf(fmt,parm2,parm3); fflush(stdout);}}
-#define SAY4(fmt,parm1,parm2,parm3,parm4)	{if(DEBUG){printf(fmt,parm2,parm3,parm4); fflush(stdout);}}
-#define SAY5(fmt,parm1,parm2,parm3,parm4,parm5)	{if(DEBUG){printf(fmt,parm2,parm3,parm4,parm5); fflush(stdout);}}
-#define SAY6(fmt,parm1,parm2,parm3,parm4,parm5,parm6)	{if(DEBUG){printf(fmt,parm2,parm3,parm4,parm5,parm6); fflush(stdout);}}
-#define SAY7(fmt,parm1,parm2,parm3,parm4,parm5,parm6,parm7)	{if(DEBUG){printf(fmt,parm2,parm3,parm4,parm5,parm6,parm7); fflush(stdout);}}
-#define SAY8(fmt,parm1,parm2,parm3,parm4,parm5,parm6,parm7)	{if(DEBUG){printf(fmt,parm2,parm3,parm4,parm5,parm6,parm7); fflush(stdout);}}
+#define SAY1(fmt,parm1)	{if(DEBUG){printf(fmt),parm1; fflush(stdout);}}
+#define SAY2(fmt,parm1,parm2)	{if(DEBUG){printf(fmt,parm1,parm2); fflush(stdout);}}
+#define SAY3(fmt,parm1,parm2,parm3)	{if(DEBUG){printf(fmt,parm1,parm2,parm3); fflush(stdout);}}
+#define SAY4(fmt,parm1,parm2,parm3,parm4)	{if(DEBUG){printf(fmt,parm1,parm2,parm3,parm4); fflush(stdout);}}
+#define SAY5(fmt,parm1,parm2,parm3,parm4,parm5)	{if(DEBUG){printf(fmt,parm1,parm2,parm3,parm4,parm5); fflush(stdout);}}
+#define SAY6(fmt,parm1,parm2,parm3,parm4,parm5,parm6)	{if(DEBUG){printf(fmt,parm1,parm2,parm3,parm4,parm5,parm6); fflush(stdout);}}
+#define SAY7(fmt,parm1,parm2,parm3,parm4,parm5,parm6,parm7)	{if(DEBUG){printf(fmt,parm1,parm2,parm3,parm4,parm5,parm6,parm7); fflush(stdout);}}
+#define SAY8(fmt,parm1,parm2,parm3,parm4,parm5,parm6,parm7)	{if(DEBUG){printf(fmt,parm1,parm2,parm3,parm4,parm5,parm6,parm7); fflush(stdout);}}
 
 
 #ifdef DEBUG
@@ -134,7 +133,7 @@ int mm_init(void)
 {
     /* Create the initial empty heap */
     if ((heap_listp = mem_sbrk(8*WSIZE)) == (void *)-1)
-	return -1;
+		return -1;
     PUT(heap_listp, 0);                          /* Alignment padding */
     PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1)); /* Prologue header */ 
     PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1)); /* Prologue footer */ 
@@ -145,9 +144,11 @@ int mm_init(void)
 	free_p = NULL;
 	free_lastp = NULL;
 
+	SAY0("DEBUG: mm_init: calling extend_heap\n");
     /* Extend the empty heap with a free block of CHUNKSIZE bytes */
     if (extend_heap(CHUNKSIZE/WSIZE) == NULL)
-	return -1;
+		return -1;
+	SAY0("DEBUG: mm_init: returning\n");
     return 0;
 }
 
@@ -157,13 +158,15 @@ int mm_init(void)
  */
 void *mm_malloc(size_t size) 
 {
+	SAY1("DEBUG: mm_malloc: mm_malloc called for (%u)\n", size);
+	SAY0("DEBUG: mm_malloc: calling mm_check(0)\n")
 	mm_check(0);
 	size_t asize;      /* Adjusted block size */
     size_t extendsize; /* Amount to extend heap if no fit */
     char *bp;      
 
     if (heap_listp == 0){
-	mm_init();
+		mm_init();
     }
     /* Ignore spurious requests */
     if (size == 0)
@@ -175,6 +178,7 @@ void *mm_malloc(size_t size)
     else
 	asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE);
 
+	SAY0("DEBUG: mm_init: calling find_fit\n");
     /* Search the free list for a fit */
     if ((bp = find_fit(asize)) != NULL) {
 	place(bp, asize);
@@ -216,15 +220,19 @@ void mm_free(void *bp)
  */
 static void *coalesce(void *bp)
 {
+	SAY1("DEBUG: coalesce: entering with bp:[%p]\n",bp);
     size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
+	SAY0("DEBUG: coalesce: size_t prev_alloc set\n");
     size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
+	SAY0("DEBUG: coalesce: size_t next_alloc set\n");
     size_t size = GET_SIZE(HDRP(bp));
-
+	SAY0("DEBUG: coalesce: locals declared\n");
 	/* Check if free AND not from extend heap, and then remove from list. This lets us call it from both mm_free, extend_heap, and place */
 	
 	/* Get NEXT_FREE as an unsigned int so that we can compare it to DEADBEEF */
 	if(!GET_ALLOC(FTRP(bp)) && GET(NEXT_FREE(bp)) != 0xDEADBEEF)
 	{
+		SAY1("DEBUG: coalesce: 0xDEADBEEF found; removing bp:[%p] from list",bp)
 		list_rm(bp);
 	}
 	
@@ -260,11 +268,13 @@ static void *coalesce(void *bp)
 	bp = PREV_BLKP(bp);
     }
 	
+	SAY1("DEBUG: coalesce: calling list_add(bp:[%p])\n", bp);
+	
 	/* add new block to the free list */
 	list_add(bp);
+	SAY1("DEBUG: coalesce: returning bp:[%p]\n", bp);
     return bp;
 }
-
 
 /*
  * mm_realloc - Naive implementation of realloc
@@ -341,26 +351,28 @@ void mm_check(int verbose)
  
 static void *extend_heap(size_t words)
 {
+	SAY0("DEBUG: extend_heap: entering\n");
     char *bp;
     size_t size;
-
+	
     /* Allocate an even number of words to maintain alignment */
     size = (words % 2) ? (words+1) * WSIZE : words * WSIZE;
     if ((long)(bp = mem_sbrk(size)) == -1)  
-	return NULL;
-
+		return NULL;
+	SAY1("DEBUG: extend_heap: mem_sbrk(%u) has returned successfully\n", size);
     /* Initialize free block header/footer and the epilogue header */
     PUT(HDRP(bp), PACK(size, 0));         /* Free block header */   
     PUT(FTRP(bp), PACK(size, 0));         /* Free block footer */   
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1)); /* New epilogue header */ 
 
+	SAY0("DEBUG: extend_heap: free block initialized; epilogue set\n");
 	/* Add something to block here in the get_next field 
 			that coalesce can check for to know that it came 
 			from extend_heap. Something like 0xDEADBEEF
 	*/
 	
 	SET(NEXT_FREE(bp), 0xDEADBEEF);
-	
+	SAY0("DEBUG: extend_heap: calling coalesce\n");
     /* Coalesce if the previous block was free */
     return coalesce(bp);
 }
@@ -376,30 +388,37 @@ static void *extend_heap(size_t words)
 
 static int list_add(void* bp)
 {
+	SAY0("DEBUG: list_add: entering\n");
 	/* list add needs to handle the following cases:
 		- The list has not yet been initialized
 		- The list has been initialized
 			- There is a free block that is too big (CALL place)
 			- There is not a free block big enough
 		*/
-		
+	SAY0("DEBUG: list_add: checking if list is empty\n");
 	if (free_p == NULL)
 	{
+		SAY0("DEBUG: list_add: list was empty; creating list\n");
 		free_p = bp;
 		free_lastp = bp;
-		SET(NEXT_FREE(free_p), GET(NULL));
-		SET(PREV_FREE(free_p), GET(NULL));
+		SAY0("DEBUG: list_add: free_p and free_lastp set\n");
+		SET(NEXT_FREE(free_p), 0x0);
+		SET(PREV_FREE(free_p), 0x0);
+		SAY0("DEBUG: list_add: returning 1! Hooray!\n");
 		return 1;
 	}
 	else
 	{
+		SAY0("DEBUG: list_add: list wasn't empty; inserting into list");
 		void* old_next = GET(NEXT_FREE(free_p));
 		SET(NEXT_FREE(free_p), bp);
 		SET(NEXT_FREE(bp), old_next);
 		SET(PREV_FREE(bp), free_p);
 		free_lastp = old_next;
+		SAY0("DEBUG: list_add: returning 1! Hooray!\n");
 		return 1;
 	}
+	SAY0("DEBUG: list_add: returning 0 :-(\n");
 	return 0;
 }
 		/* This is the start of an alternate way that places a block at the end 
@@ -418,6 +437,7 @@ static int list_add(void* bp)
 		return 1;
 		*/
 
+
 /* Delete a block from the free list
 *  return 1 if success and 0 if fail 
 * NOTE: list_rm should not call coalesce */
@@ -430,8 +450,8 @@ static int list_rm(void* bp)
 	}
 	/* Insert at beginning of list */
 
-	void* next = (void*)RET(NEXT_FREE(bp));
-	void* prev = (void*)RET(PREV_FREE(bp));
+	void* next = GET_PTR(NEXT_FREE(bp));
+	void* prev = GET_PTR(PREV_FREE(bp));
 	
 	SET(PREV_FREE(next), GET(prev));
 	SET(NEXT_FREE(prev), GET(next));
