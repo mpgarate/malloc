@@ -29,11 +29,6 @@ team_t team = {
 
 /* Macros based on book code mm.c */
 
-/*
- * If NEXT_FIT defined use next fit search, else use first fit search 
- */
-#define NEXT_FITx
-
 /* Basic constants and macros */
 #define WSIZE       4       /* Word and header/footer size (bytes) */
 #define DSIZE       8       /* Doubleword size (bytes) */
@@ -61,10 +56,7 @@ team_t team = {
 #define PREV_BLKP(bp)  ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
 /* Global variables */
-static char *heap_listp = 0;  /* Pointer to first block */  
-#ifdef NEXT_FIT
-static char *rover;           /* Next fit rover */
-#endif
+static char *heap_listp = 0;  /* Pointer to first block */
 
 /* Function prototypes for internal helper routines */
 static void *extend_heap(size_t words);
@@ -89,10 +81,6 @@ int mm_init(void)
     PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1)); /* Prologue footer */ 
     PUT(heap_listp + (3*WSIZE), PACK(0, 1));     /* Epilogue header */
     heap_listp += (2*WSIZE);
-
-#ifdef NEXT_FIT
-    rover = heap_listp;
-#endif
 
     /* Extend the empty heap with a free block of CHUNKSIZE bytes */
     if (extend_heap(CHUNKSIZE/WSIZE) == NULL) 
@@ -190,12 +178,6 @@ static void *coalesce(void *bp)
 	PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
 	bp = PREV_BLKP(bp);
     }
-#ifdef NEXT_FIT
-    /* Make sure the rover isn't pointing into the free block */
-    /* that we just coalesced */
-    if ((rover > (char *)bp) && (rover < NEXT_BLKP(bp))) 
-	rover = bp;
-#endif
     return bp;
 }
 
