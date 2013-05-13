@@ -68,8 +68,8 @@ team_t team = {
 #define DEBUG	1
 
 /* Call heapchecker */
-#define	HC() {if(DEBUG)mm_check(0);fflush(stdout);}
-#define	PL() {if(DEBUG)printlist();;fflush(stdout);}
+#define	CHEAP() {if(DEBUG)mm_check(0);fflush(stdout);}
+#define	PLIST() {if(DEBUG)printlist();;fflush(stdout);}
 
 
 /* Epic macros for SAY */
@@ -174,7 +174,7 @@ void *mm_malloc(size_t size)
 {
 	SAY1("DEBUG: mm_malloc: mm_malloc called for (%u)\n", size);
 	SAY0("DEBUG: mm_malloc: calling mm_check(0)\n")
-	HC()
+	CHEAP()
 	size_t asize;      /* Adjusted block size */
     size_t extendsize; /* Amount to extend heap if no fit */
     char *bp;
@@ -208,7 +208,9 @@ void *mm_malloc(size_t size)
 	SAY2("DEBUG: mm_malloc calling place(%p, %i)\n", bp, asize);
     place(bp, asize);
 	SAY1("DEBUG: mm_malloc returning %p\n", bp);
-	HC()
+	SAY("DEBUG: mm_malloc printing list:\n");
+	PLIST()
+	CHEAP()
     return bp;
 } 
 
@@ -218,7 +220,7 @@ void *mm_malloc(size_t size)
  */
 void mm_free(void *bp)
 {
-	HC()
+	CHEAP()
     if(bp == 0) 
 	return;
 
@@ -232,7 +234,7 @@ void mm_free(void *bp)
 	
 	/* TODO: addToList is called from within coalesce */
     coalesce(bp);
-	HC()
+	CHEAP()
 }
 
 /*
@@ -295,8 +297,8 @@ static void *coalesce(void *bp)
 	list_add(bp);
 	SAY1("DEBUG: coalesce: returning bp:[%p]\n", bp);
 	SAY0("DEBUG: coalesce: calling mm_check after list_add\n");
-	HC()
-	PL()
+	CHEAP()
+	PLIST()
     return bp;
 }
 
@@ -363,8 +365,20 @@ void mm_check(int verbose)
 			{
 				printf("Double free block!\n");
 			}
-		SAY2("DEBUG: mm_check: GET_ALLOC is %i, list_search is %i\n", (GET_ALLOC(HDRP(bp))), list_search(bp));
-		Assert((GET_ALLOC(HDRP(bp))) && list_search(bp) == 1);
+		
+		if(GET_ALLOC(HDRP(bp)) == list_search(bp))
+		{
+			if (GET_ALLOC(HDRP(bp)))
+			{
+				SAY1("ERROR: mm_check: allocated block %p in list\n", bp);
+				SAY2("DEBUG: mm_check: GET_ALLOC is %i, list_search is %i\n", (GET_ALLOC(HDRP(bp))), list_search(bp));
+			}
+			else
+			{
+				SAY1("ERROR: mm_check: free block %p not in list\n", bp);
+				SAY2("DEBUG: mm_check: GET_ALLOC is %i, list_search is %i\n", (GET_ALLOC(HDRP(bp))), list_search(bp));
+			}
+		}
     }
 
     if (verbose)
@@ -402,6 +416,7 @@ static void *extend_heap(size_t words)
 	SAY0("DEBUG: extend_heap: calling coalesce\n");
     /* Coalesce if the previous block was free */
 	heap_lastp = bp;
+	list_add(bp);
     return coalesce(bp);
 }
 
@@ -416,7 +431,7 @@ static void *extend_heap(size_t words)
 
 static int list_add(void* bp)
 {
-	PL()
+	PLIST()
 	SAY0("DEBUG: list_add: entering\n");
 	/* list add needs to handle the following cases:
 		- The list has not yet been initialized
@@ -434,7 +449,7 @@ static int list_add(void* bp)
 		PUT(NEXT_FREE(bp), 0);
 		PUT(PREV_FREE(bp), 0);
 		SAY("DEBUG: list_add printing before return\n");
-		PL()
+		PLIST()
 		SAY0("DEBUG: list_add: returning 1! Hooray!\n");
 		SAY2("Should be true: %i | %p\n", GET(NEXT_FREE(bp)) == 0, GET(NEXT_FREE(bp)));
 		return 1;
@@ -453,11 +468,11 @@ static int list_add(void* bp)
 		//PUT(PREV_FREE(bp), free_p);
 		free_lastp = old_next;
 		SAY0("DEBUG: list_add: returning 1! Hooray!\n");
-		PL()
+		PLIST()
 		return 1;
 	}
 	SAY0("DEBUG: list_add: returning 0 :-(\n");
-	PL()
+	PLIST()
 	return 0;
 }
 
@@ -469,7 +484,7 @@ static int list_add(void* bp)
 static int list_rm(void* bp)
 {	/* If list is empty */
 	SAY1("DEBUG: list_rm removing %p\n", bp);
-	PL()
+	PLIST()
 	if (free_p == NULL)
 	{
 		SAY1("DEBUG: free_p was null, returning fail %p\n", free_p);
@@ -487,7 +502,7 @@ static int list_rm(void* bp)
 		SAY("DEBUG: list_rm: bp was only one in list. Removing. \n");
 		free_p = NULL;
 		SAY1("DEBUG: list_rm: free_p should be nil: %p\n", free_p);
-		PL()
+		PLIST()
 		return 1;
 	}
 	
@@ -501,7 +516,7 @@ static int list_rm(void* bp)
 	SAY0("DEBUG: list_rm set curr to NULL\n");
 	PUT(PREV_FREE(bp), NULL);
 	PUT(NEXT_FREE(bp), NULL);
-	PL()
+	PLIST()
 	return 1;
 }
 /* 
@@ -516,7 +531,7 @@ static void place(void *bp, size_t asize)
 
 	SAY1("DEBUG: placing %p\n", bp);
 	
-	if (list_rm(bp)) SAY1("DEBUG: place: removed %p\n", bp);
+	//if (list_rm(bp)) SAY1("DEBUG: place: removed %p\n", bp);
     if ((csize - asize) >= (2*DSIZE)) {
 	PUT(HDRP(bp), PACK(asize, 1));
 	PUT(FTRP(bp), PACK(asize, 1));
@@ -586,10 +601,9 @@ static void *find_fit(size_t asize)
 
 static int list_search(void* bp)
 {
-	int found = 0;
 	void * lp = free_p;
 	
-	SAY1("DEBUG: list_search: lp is %p \n", lp);
+	//SAY1("DEBUG: list_search: lp is %p \n", lp);
 	
 	
 	if (bp == lp) { 		/* We have found a match */
@@ -597,12 +611,12 @@ static int list_search(void* bp)
 			}
 	if (bp == NULL)
 	{
-		SAY1("DEBUG: loop: lp was null \n", lp);
+		//SAY1("DEBUG: loop: lp was null \n", lp);
 		return 0; /* not in the list */
 	}
-	SAY1("DEBUG: loop: lpget is %p \n", NEXT_FREE(lp));
+	//SAY1("DEBUG: loop: lpget is %p \n", NEXT_FREE(lp));
 		while(NEXT_FREE(lp) != 0){
-				SAY1("DEBUG: list_search: looping, lp is %p \n", lp);
+				//SAY1("DEBUG: list_search: looping, lp is %p \n", lp);
 				lp = (void *)GET(NEXT_FREE(lp));
 				if (bp == lp) { 	/* We have found a match */
 					return 1;
@@ -614,11 +628,11 @@ static int list_search(void* bp)
 static void printlist()
 {
 	void *bp = free_p;
-	SAY1("DEBUG:       Printing Free List ------------- %p\n", bp);
+	SAY("DEBUG: ------------- Printing Free List -------------\n");
     for (bp = free_p; bp != NULL; bp = GET(NEXT_FREE(bp))) {
 			printblock(bp);
 		}
-
+	SAY("DEBUG: ------------- End Free List Print ------------\n");
 }
 
 static void printblock(void *bp) 
