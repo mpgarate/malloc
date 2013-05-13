@@ -117,6 +117,15 @@ static int list_rm(void* bp);
 /* Combine two adjacent free blocks */
 static int combine(void* bp, void* bp2);
 
+
+/* Our global variables */
+
+
+/* TODO: update this value in extend_heap AND place AND anywhere else? */ 
+static void* heap_lastp;	/* Point to last item in heap */
+static void* free_p;		/* Point to first free list item */
+static void* free_lastp;	/* Point to last free list item*/
+
 /* 
  * mm_init - Initialize the memory manager 
  * Based on book code mm.c
@@ -132,9 +141,9 @@ int mm_init(void)
     PUT(heap_listp + (3*WSIZE), PACK(0, 1));     /* Epilogue header */
     heap_listp += (6*WSIZE);
 	
-	static void* heap_lastp = heap_listp;
-	static void* free_p = NULL;
-	static void* free_lastp = NULL;
+	heap_lastp = heap_listp;
+	free_p = NULL;
+	free_lastp = NULL;
 
     /* Extend the empty heap with a free block of CHUNKSIZE bytes */
     if (extend_heap(CHUNKSIZE/WSIZE) == NULL)
@@ -213,7 +222,8 @@ static void *coalesce(void *bp)
 
 	/* Check if free AND not from extend heap, and then remove from list. This lets us call it from both mm_free, extend_heap, and place */
 	
-	if(!GET_ALLOC(FTRP(bp)) && RET(NEXT_FREE(bp) != 0xDEADBEEF))
+	/* Get NEXT_FREE as an unsigned int so that we can compare it to DEADBEEF */
+	if(!GET_ALLOC(FTRP(bp)) && GET(NEXT_FREE(bp)) != 0xDEADBEEF)
 	{
 		list_rm(bp);
 	}
@@ -356,7 +366,14 @@ static void *extend_heap(size_t words)
 }
 
 
-/* Add to list, return 1 if success and 0 if fail */
+/* Add to list, return 1 if success and 0 if fail
+	
+	Make sure to update the following variables:
+	static void* free_p;		 Point to first free list item 
+	static void* free_lastp;	 Point to last free list item
+
+ */
+
 static int list_add(void* bp)
 {
 	/* list add needs to handle the following cases:
@@ -369,9 +386,27 @@ static int list_add(void* bp)
 	if (free_p == NULL)
 	{
 		free_p = bp;
-		
+		free_lastp = bp;
+		SET(NEXT_FREE(free_p), NULL);
+		SET(PREV_FREE(free_p), NULL);
+		return 1;
 	}
-	
+	else
+	{
+		/* Copy the start pointer to a counter pointer */
+		void* cp = free_p;
+		/* Loop through list until on the last free block */ 
+		while (NEXT_FREE(cp) != NULL)
+		{
+			cp = GET(NEXT_FREE(cp));
+		}
+		SET(NEXT_FREE(cp), bp);
+		cp = GET(NEXT_FREE(cp));
+		free_lastp = bp;
+		SET(NEXT_FREE(free_p), NULL);
+		SET(PREV_FREE(free_p), NULL);
+		return 1;
+	}
 	
 	return 0;
 }
