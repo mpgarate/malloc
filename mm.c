@@ -55,6 +55,44 @@ team_t team = {
 #define NEXT_BLKP(bp)  ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
 #define PREV_BLKP(bp)  ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
+/*  macros for free block pointers */
+#define NEXT_FREE(bp)	(bp)
+#define PREV_FREE(bp) 	(void *)(bp + WSIZE)
+
+/* Set and retrieve free pointers */
+#define SET(p, val)		(*(unsigned int *)(p) = (val))
+#define RET(p)			(*(unsigned int *)(p))
+
+/* DEBUG: 1 if true, 0 if false. Will say more things if true.*/
+#define DEBUG	1
+
+
+/* Epic macros for SAY */
+#define SAY0(fmt)		{if(DEBUG){printf(fmt); fflush(stdout);}}
+#define SAY1(fmt,parm1)	{if(DEBUG){printf(fmt); fflush(stdout);}}
+#define SAY2(fmt,parm1,parm2)	{if(DEBUG){printf(fmt,parm2); fflush(stdout);}}
+#define SAY3(fmt,parm1,parm2,parm3)	{if(DEBUG){printf(fmt,parm2,parm3); fflush(stdout);}}
+#define SAY4(fmt,parm1,parm2,parm3,parm4)	{if(DEBUG){printf(fmt,parm2,parm3,parm4); fflush(stdout);}}
+#define SAY5(fmt,parm1,parm2,parm3,parm4,parm5)	{if(DEBUG){printf(fmt,parm2,parm3,parm4,parm5); fflush(stdout);}}
+#define SAY6(fmt,parm1,parm2,parm3,parm4,parm5,parm6)	{if(DEBUG){printf(fmt,parm2,parm3,parm4,parm5,parm6); fflush(stdout);}}
+#define SAY7(fmt,parm1,parm2,parm3,parm4,parm5,parm6,parm7)	{if(DEBUG){printf(fmt,parm2,parm3,parm4,parm5,parm6,parm7); fflush(stdout);}}
+#define SAY8(fmt,parm1,parm2,parm3,parm4,parm5,parm6,parm7)	{if(DEBUG){printf(fmt,parm2,parm3,parm4,parm5,parm6,parm7); fflush(stdout);}}
+
+
+#ifdef DEBUG
+#define Assert(c) doAssert(c)
+#else
+#define Assert(c)
+#endif
+
+void doAssert(int c)
+{
+  if (c) return;
+  int x = 0;
+  x = x / x;
+}
+
+
 /* Global variables */
 static char *heap_listp = 0;  /* Pointer to first block */
 
@@ -64,8 +102,19 @@ static void place(void *bp, size_t asize);
 static void *find_fit(size_t asize);
 static void *coalesce(void *bp);
 static void printblock(void *bp); 
-static void checkheap(int verbose);
 static void checkblock(void *bp);
+
+/* TODO: Functions we want to make */
+
+/* Print our free block list(s) */
+static void list_print(void);
+/* Add to list, return 1 if success and 0 if fail */
+static int list_add(void* bp); 
+/* Delete to list, return 1 if success and 0 if fail */
+/* NOTE: list_rm should not call coalesce */
+static int list_rm(void* bp);
+/* Combine two adjacent free blocks */
+static int combine(void* bp, void* bp2);
 
 /* 
  * mm_init - Initialize the memory manager 
@@ -83,7 +132,7 @@ int mm_init(void)
     heap_listp += (2*WSIZE);
 
     /* Extend the empty heap with a free block of CHUNKSIZE bytes */
-    if (extend_heap(CHUNKSIZE/WSIZE) == NULL) 
+    if (extend_heap(CHUNKSIZE/WSIZE) == NULL)
 	return -1;
     return 0;
 }
@@ -94,7 +143,8 @@ int mm_init(void)
  */
 void *mm_malloc(size_t size) 
 {
-    size_t asize;      /* Adjusted block size */
+	mm_check(0);
+	size_t asize;      /* Adjusted block size */
     size_t extendsize; /* Amount to extend heap if no fit */
     char *bp;      
 
@@ -141,6 +191,8 @@ void mm_free(void *bp)
 
     PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
+	
+	/* TODO: addToList is called from within coalesce */
     coalesce(bp);
 }
 
@@ -154,17 +206,29 @@ static void *coalesce(void *bp)
     size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
     size_t size = GET_SIZE(HDRP(bp));
 
+	/* Check if free AND not from extend heap, and then remove from list. This lets us call it from both mm_free, extend_heap, and place */
+	
+	if(!GET_ALLOC(FTRP(bp)) && RET(NEXT_FREE(bp) != 0xDEADBEEF))
+	{
+		list_rm(bp);
+	}
+	
+	/* In each of these functions, check if the block-to-be-merged is in free list and remove it first */
     if (prev_alloc && next_alloc) {            /* Case 1 */
 	return bp;
     }
 
     else if (prev_alloc && !next_alloc) {      /* Case 2 */
+	
+	/* Remove the block to be merged from the list. It's ok if it isn't there. */
+	list_rm(NEXT_BLKP(bp));
 	size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
 	PUT(HDRP(bp), PACK(size, 0));
 	PUT(FTRP(bp), PACK(size,0));
     }
 
     else if (!prev_alloc && next_alloc) {      /* Case 3 */
+	list_rm(PREV_BLKP(bp));
 	size += GET_SIZE(HDRP(PREV_BLKP(bp)));
 	PUT(FTRP(bp), PACK(size, 0));
 	PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
@@ -172,12 +236,17 @@ static void *coalesce(void *bp)
     }
 
     else {                                     /* Case 4 */
+	list_rm(NEXT_BLKP(bp));
+	list_rm(PREV_BLKP(bp));
 	size += GET_SIZE(HDRP(PREV_BLKP(bp))) + 
 	    GET_SIZE(FTRP(NEXT_BLKP(bp)));
 	PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
 	PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
 	bp = PREV_BLKP(bp);
     }
+	
+	/* add new block to the free list */
+	list_add(bp);
     return bp;
 }
 
@@ -221,10 +290,30 @@ void *mm_realloc(void *ptr, size_t size)
 }
 
 /* 
- * check - We don't check anything right now. 
+ * check - Based from book code
  */
 void mm_check(int verbose)  
 { 
+    char *bp = heap_listp;
+
+    if (verbose)
+	printf("Heap (%p):\n", heap_listp);
+
+    if ((GET_SIZE(HDRP(heap_listp)) != DSIZE) || !GET_ALLOC(HDRP(heap_listp)))
+	printf("Bad prologue header\n");
+    checkblock(heap_listp);
+
+    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+	if (verbose) 
+	    printblock(bp);
+	checkblock(bp);
+    }
+
+    if (verbose)
+	printblock(bp);
+    if ((GET_SIZE(HDRP(bp)) != 0) || !(GET_ALLOC(HDRP(bp))))
+	printf("Bad epilogue header\n");
+	
 }
 
 /* 
@@ -235,7 +324,7 @@ void mm_check(int verbose)
  * extend_heap - Extend heap with free block and return its block pointer
  */
  
-static void *extend_heap(size_t words) 
+static void *extend_heap(size_t words)
 {
     char *bp;
     size_t size;
@@ -250,6 +339,13 @@ static void *extend_heap(size_t words)
     PUT(FTRP(bp), PACK(size, 0));         /* Free block footer */   
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1)); /* New epilogue header */ 
 
+	/* Add something to block here in the get_next field 
+			that coalesce can check for to know that it came 
+			from extend_heap. Something like 0xDEADBEEF
+	*/
+	
+	SET(NEXT_FREE(bp), 0xDEADBEEF);
+	
     /* Coalesce if the previous block was free */
     return coalesce(bp);
 }
@@ -271,6 +367,9 @@ static void place(void *bp, size_t asize)
 	bp = NEXT_BLKP(bp);
 	PUT(HDRP(bp), PACK(csize-asize, 0));
 	PUT(FTRP(bp), PACK(csize-asize, 0));
+	
+	/* Add this block slice to the free list */
+	coalesce(bp);
     }
     else { 
 	PUT(HDRP(bp), PACK(csize, 1));
@@ -283,6 +382,8 @@ static void place(void *bp, size_t asize)
  * find_fit - Find a fit for a block with asize bytes 
  */
  
+ 
+ /* TODO: make this get fit from free list */
 static void *find_fit(size_t asize)
 
 {
@@ -301,7 +402,6 @@ static void printblock(void *bp)
 {
     size_t hsize, halloc, fsize, falloc;
 
-    checkheap(0);
     hsize = GET_SIZE(HDRP(bp));
     halloc = GET_ALLOC(HDRP(bp));  
     fsize = GET_SIZE(FTRP(bp));
@@ -312,9 +412,9 @@ static void printblock(void *bp)
 	return;
     }
 
-    /*  printf("%p: header: [%p:%c] footer: [%p:%c]\n", bp, 
-	hsize, (halloc ? 'a' : 'f'), 
-	fsize, (falloc ? 'a' : 'f')); */
+	//SAY5("%p: header: [%p:%c] footer: [%p:%c]\n", bp, 
+	//hsize, (halloc ? 'a' : 'f'), 
+	//fsize, (falloc ? 'a' : 'f'));
 }
 
 static void checkblock(void *bp) 
@@ -323,30 +423,4 @@ static void checkblock(void *bp)
 	printf("Error: %p is not doubleword aligned\n", bp);
     if (GET(HDRP(bp)) != GET(FTRP(bp)))
 	printf("Error: header does not match footer\n");
-}
-
-/* 
- * checkheap - Minimal check of the heap for consistency 
- */
-void checkheap(int verbose) 
-{
-    char *bp = heap_listp;
-
-    if (verbose)
-	printf("Heap (%p):\n", heap_listp);
-
-    if ((GET_SIZE(HDRP(heap_listp)) != DSIZE) || !GET_ALLOC(HDRP(heap_listp)))
-	printf("Bad prologue header\n");
-    checkblock(heap_listp);
-
-    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-	if (verbose) 
-	    printblock(bp);
-	checkblock(bp);
-    }
-
-    if (verbose)
-	printblock(bp);
-    if ((GET_SIZE(HDRP(bp)) != 0) || !(GET_ALLOC(HDRP(bp))))
-	printf("Bad epilogue header\n");
 }
