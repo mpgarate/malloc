@@ -41,23 +41,23 @@ team_t team = {
 
 /* Read and write a word at address p */
 #define GET(p)       (*(unsigned int *)(p))
-#define PUT(p, val)  	(*(unsigned int *)(p) = (val))
+#define PUT(p, val)  (*(unsigned int *)(p) = (val))
 
 /* Read the size and allocated fields from address p */
 #define GET_SIZE(p)  (GET(p) & ~0x7)
 #define GET_ALLOC(p) (GET(p) & 0x1)
 
 /* Given block ptr bp, compute address of its header and footer */
-#define HDRP(bp)       ((char *)(bp) - WSIZE)
-#define FTRP(bp)       ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE)
+#define HDRP(bp)       ((void *)(bp) - WSIZE)
+#define FTRP(bp)       ((void *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE)
 
 /* Given block ptr bp, compute address of next and previous blocks */
-#define NEXT_BLKP(bp)  ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
-#define PREV_BLKP(bp)  ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
+#define NEXT_BLKP(bp)  ((void *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
+#define PREV_BLKP(bp)  ((void *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
 /*  macros for free block pointers */
 #define NEXT_FREE(bp)	((void *)(bp))
-#define PREV_FREE(bp) 	((void *)(bp + WSIZE))
+#define PREV_FREE(bp) 	((void *)(bp) + WSIZE)
 
 /* Set and retrieve free pointers */
 #define SET(p, val)		(*(unsigned int *)(p) = (val))
@@ -114,7 +114,7 @@ static void checkblock(void *bp);
 
 void mm_check(int verbose);
 /* Print our free block list(s) */
-static void list_print(void);
+//tatic void list_print(void);
 /* Add to list, return 1 if success and 0 if fail */
 static int list_add(void* bp); 
 /* Delete to list, return 1 if success and 0 if fail */
@@ -131,7 +131,7 @@ static void printlist();
 
 /* TODO: update this value in extend_heap AND place AND anywhere else? */ 
 static void* heap_lastp;	/* Point to last item in heap */
-static void* free_p;		/* Point to first free list item */
+static unsigned int free_p;		/* Point to first free list item */
 static void* free_lastp;	/* Point to last free list item*/
 
 /* 
@@ -409,18 +409,14 @@ static int list_add(void* bp)
 	if (free_p == NULL)
 	{
 		SAY0("DEBUG: list_add: list was empty; creating list\n");
-		free_p = &bp;
-		free_lastp = &bp;
+		free_p = bp;
+		free_lastp = bp;
 		SAY0("DEBUG: list_add: free_p and free_lastp set\n");
-		SET(NEXT_FREE(bp), 0xDEADBEEF);
-		SET(PREV_FREE(bp), 0xDEADBEEF);
-		
-		//#define SET(p, val)		((p) = (unsigned int *)(val))
-		
-		//bp = (unsigned int *)0xDEADBEEF;
+		PUT(NEXT_FREE(bp), 0);
+		PUT(PREV_FREE(bp), 0);
 		
 		SAY0("DEBUG: list_add: returning 1! Hooray!\n");
-		SAY2("Should be true: %i | %p\n", (NEXT_FREE(bp) == 0xDEADBEEF), NEXT_FREE(bp));
+		SAY2("Should be true: %i | %p\n", GET(NEXT_FREE(bp)) == 0, GET(NEXT_FREE(bp)));
 		return 1;
 	}
 	else
@@ -525,7 +521,7 @@ static void printlist()
 		printblock(bp);
 		
 	}
-    for (bp = free_p; bp != NULL; bp = NEXT_FREE(bp)) {
+    for (bp = free_p; bp != NULL; bp = GET(NEXT_FREE(bp))) {
 		SAY1("Got here %p\n", bp);
 			printblock(bp);
 		}
