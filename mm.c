@@ -63,8 +63,13 @@ team_t team = {
 #define SET(p, val)		(*(unsigned int *)(p) = val)
 #define GET_PTR(p)		(void *)(p)
 
+
 /* DEBUG: 1 if true, 0 if false. Will say more things if true.*/
-#define DEBUG	1
+#define DEBUG	0
+
+/* Call heapchecker */
+#define	HC {if(DEBUG)mm_check(0);fflush(stdout);}
+
 
 /* Epic macros for SAY */
 #define SAY0(fmt)		{if(DEBUG){printf(fmt); fflush(stdout);}}
@@ -462,8 +467,8 @@ static int list_rm(void* bp)
 	SET(PREV_FREE(next), GET(prev));
 	SET(NEXT_FREE(prev), GET(next));
 	
-	SET(PREV_FREE(bp), GET(NULL));
-	SET(NEXT_FREE(bp), GET(NULL));
+	SET(PREV_FREE(bp), NULL);
+	SET(NEXT_FREE(bp), NULL);
 	
 	return 0;
 }
