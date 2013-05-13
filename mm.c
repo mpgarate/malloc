@@ -65,7 +65,7 @@ team_t team = {
 
 
 /* DEBUG: 1 if true, 0 if false. Will say more things if true.*/
-#define DEBUG	0
+#define DEBUG	1
 
 /* Call heapchecker */
 #define	HC() {if(DEBUG)mm_check(0);fflush(stdout);}
@@ -388,6 +388,7 @@ static void *extend_heap(size_t words)
 	SAY0("DEBUG: extend_heap: free block initialized; epilogue set\n");
 	SAY0("DEBUG: extend_heap: calling coalesce\n");
     /* Coalesce if the previous block was free */
+	heap_lastp = bp;
     return coalesce(bp);
 }
 
@@ -512,6 +513,7 @@ static void place(void *bp, size_t asize)
 	
 	/* Add this block slice to the free list */
 	if (list_rm(bp)) SAY1("DEBUG: place: calling coalesce on %p\n", bp);
+	if (bp > heap_lastp) heap_lastp = bp;
 	coalesce(bp);
     }
     else { 
@@ -549,7 +551,7 @@ static void *find_fit(size_t asize)
     void *bp;
 	void *best = NULL; /* return NULL if none found */
 	size_t best_size = (size_t)-1;	/* Gets the max size of size_t */
-    for (bp = NEXT_FREE(free_p); bp != NULL; bp = GET(NEXT_FREE(bp))) {
+    for (bp = NEXT_FREE(free_p); bp != NULL && GET_SIZE(HDRP(bp)) < heap_lastp; bp = GET(NEXT_FREE(bp))) {
 		if (asize == GET_SIZE(HDRP(bp))) {
 			return bp;		/* If they are equal, this fit is the best */
 		}
