@@ -56,8 +56,8 @@ team_t team = {
 #define PREV_BLKP(bp)  ((void *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
 /*  macros for free block pointers */
-#define NEXT_FREE(bp)	((void *)(bp))
-#define PREV_FREE(bp) 	((void *)(bp) + WSIZE)
+#define NEXT_FREE(bp)	((char *)(bp))
+#define PREV_FREE(bp) 	((char *)(bp) + WSIZE)
 
 /* Set and retrieve free pointers */
 #define SET(p, val)		(*(unsigned int *)(p) = (val))
@@ -176,7 +176,7 @@ void *mm_malloc(size_t size)
 	HC()
 	size_t asize;      /* Adjusted block size */
     size_t extendsize; /* Amount to extend heap if no fit */
-    char *bp;      
+    char *bp;
 
     if (heap_listp == 0){
 		mm_init();
@@ -194,16 +194,16 @@ void *mm_malloc(size_t size)
 	SAY0("DEBUG: mm_malloc: calling find_fit\n");
     /* Search the free list for a fit */
     if ((bp = find_fit(asize)) != NULL) {
-	SAY2("DEBUG: mm_malloc calling place(%p, %i)\n", bp, asize);
-	place(bp, asize);
-	SAY1("DEBUG: mm_malloc returning %p\n", bp);
-	return bp;
+		SAY2("DEBUG: mm_malloc calling place(%p, %i)\n", bp, asize);
+		place(bp, asize);
+		SAY1("DEBUG: mm_malloc returning %p\n", bp);
+		return bp;
     }
 
     /* No fit found. Get more memory and place the block */
     extendsize = MAX(asize,CHUNKSIZE);
     if ((bp = extend_heap(extendsize/WSIZE)) == NULL)  
-	return NULL;
+		return NULL;
 	SAY2("DEBUG: mm_malloc calling place(%p, %i)\n", bp, asize);
     place(bp, asize);
 	SAY1("DEBUG: mm_malloc returning %p\n", bp);
@@ -221,7 +221,7 @@ void mm_free(void *bp)
 
     size_t size = GET_SIZE(HDRP(bp));
     if (heap_listp == 0){
-	mm_init();
+		mm_init();
     }
 
     PUT(HDRP(bp), PACK(size, 0));
@@ -411,7 +411,7 @@ static int list_add(void* bp)
 			- There is not a free block big enough
 		*/
 	SAY0("DEBUG: list_add: checking if list is empty\n");
-	if (free_p == NULL)
+	if (GET_PTR(free_p) == NULL)
 	{
 		SAY0("DEBUG: list_add: list was empty; creating list\n");
 		free_p = bp;
@@ -422,7 +422,7 @@ static int list_add(void* bp)
 		SAY("DEBUG: list_add printing before return\n");
 		PL()
 		SAY0("DEBUG: list_add: returning 1! Hooray!\n");
-		SAY2("Should be true: %i | %p\n", GET(NEXT_FREE(bp)) == 0, GET(NEXT_FREE(bp)));
+		SAY2("Should be true: %i | %p\n", GET_PTR(NEXT_FREE(bp)) == 0, GET_PTR(NEXT_FREE(bp)));
 		return 1;
 	}
 	else
@@ -463,6 +463,11 @@ static int list_rm(void* bp)
 	}
 	/* Insert at beginning of list */
 
+	/* determine somehow if something is in the list */
+	/* Let's try to assume that allocated and free bit is set properly */
+	
+	if(GET_ALLOC(HDRP(bp))) return 1; /* Success! No need to remove from list */
+	
 	if(GET(NEXT_FREE(bp)) == 0)
 	{
 		SAY("DEBUG: list_rm: bp was only one in list. Removing. \n");
@@ -521,12 +526,9 @@ static void place(void *bp, size_t asize)
  */
  
  
- /* TODO: make this get fit from free list */
-static void *find_fit(size_t asize)
-
-{
+ 
     /* First fit search */
-    void *bp;
+ /*   void *bp;
     for (bp = NEXT_FREE(free_p); bp != NULL; bp = GET(NEXT_FREE(bp))) {
 		if (asize <= GET_SIZE(HDRP(bp))) {
 			SAY4("DEBUG: find_fit: found for asize: %i, %p: %i, %i\n", asize, bp, GET_SIZE(HDRP(bp)), GET_ALLOC(HDRP(bp)));
@@ -534,7 +536,30 @@ static void *find_fit(size_t asize)
 			return bp;
 		}
     }
-    return NULL; /* No fit */
+    return NULL; // no fit
+	
+	*/
+ 
+ 
+ /* TODO: make this get fit from free list */
+static void *find_fit(size_t asize)
+
+{
+ /* Best fit search */
+    void *bp;
+	void *best = NULL; /* return NULL if none found */
+	size_t best_size = (size_t)-1;	/* Gets the max size of size_t */
+    for (bp = NEXT_FREE(free_p); bp != NULL; bp = GET(NEXT_FREE(bp))) {
+		if (asize == GET_SIZE(HDRP(bp))) {
+			return bp;		/* If they are equal, this fit is the best */
+		}
+		else if(asize < GET_SIZE(HDRP(bp)) && GET_SIZE(HDRP(bp)) < best_size )
+		{
+			best_size = GET_SIZE(HDRP(bp));
+			best = bp;
+		}
+    }
+	return best;
 }
 
 static void printlist()
