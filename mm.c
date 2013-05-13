@@ -131,7 +131,7 @@ static void printlist();
 
 /* TODO: update this value in extend_heap AND place AND anywhere else? */ 
 static void* heap_lastp;	/* Point to last item in heap */
-static unsigned int free_p;		/* Point to first free list item */
+static void* free_p;		/* Point to first free list item */
 static void* free_lastp;	/* Point to last free list item*/
 
 /* 
