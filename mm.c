@@ -123,13 +123,15 @@ static int combine(void* bp, void* bp2);
 int mm_init(void) 
 {
     /* Create the initial empty heap */
-    if ((heap_listp = mem_sbrk(4*WSIZE)) == (void *)-1)
+    if ((heap_listp = mem_sbrk(6*WSIZE)) == (void *)-1)
 	return -1;
     PUT(heap_listp, 0);                          /* Alignment padding */
     PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1)); /* Prologue header */ 
     PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1)); /* Prologue footer */ 
     PUT(heap_listp + (3*WSIZE), PACK(0, 1));     /* Epilogue header */
     heap_listp += (2*WSIZE);
+	
+	static void* free_p = NULL;
 
     /* Extend the empty heap with a free block of CHUNKSIZE bytes */
     if (extend_heap(CHUNKSIZE/WSIZE) == NULL)
@@ -350,6 +352,19 @@ static void *extend_heap(size_t words)
     return coalesce(bp);
 }
 
+
+/* Add to list, return 1 if success and 0 if fail */
+static int list_add(void* bp)
+{
+	return 0;
+}
+
+/* Delete to list, return 1 if success and 0 if fail */
+/* NOTE: list_rm should not call coalesce */
+static int list_rm(void* bp)
+{
+	return 0;
+}
 
 /* 
  * place - Place block of asize bytes at start of free block bp 
