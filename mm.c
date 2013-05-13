@@ -61,7 +61,7 @@ team_t team = {
 
 /* Set and retrieve free pointers */
 #define SET(p, val)		(*(unsigned int *)(p) = (val))
-#define RET(p)			(*(unsigned int *)(p))
+#define GET_PTR(p)		(void *)(p)
 
 /* DEBUG: 1 if true, 0 if false. Will say more things if true.*/
 #define DEBUG	1
@@ -114,8 +114,8 @@ static int list_add(void* bp);
 /* Delete to list, return 1 if success and 0 if fail */
 /* NOTE: list_rm should not call coalesce */
 static int list_rm(void* bp);
-/* Combine two adjacent free blocks */
-static int combine(void* bp, void* bp2);
+/* NOTE: We're skipping this for now. Combine two adjacent free blocks */
+//static int combine(void* bp, void* bp2);
 
 
 /* Our global variables */
@@ -399,7 +399,9 @@ static int list_add(void* bp)
 		SET(PREV_FREE(bp), free_p);
 		free_lastp = old_next;
 		return 1;
-		
+	}
+	return 0;
+}
 		/* This is the start of an alternate way that places a block at the end 
 			//Copy the start pointer to a counter pointer 
 		void* cp = free_p;
@@ -415,10 +417,6 @@ static int list_add(void* bp)
 		SET(PREV_FREE(free_p), NULL);
 		return 1;
 		*/
-	}
-	
-	return 0;
-}
 
 /* Delete to list, return 1 if success and 0 if fail */
 /* NOTE: list_rm should not call coalesce */
