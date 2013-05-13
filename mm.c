@@ -194,7 +194,9 @@ void *mm_malloc(size_t size)
 	SAY0("DEBUG: mm_malloc: calling find_fit\n");
     /* Search the free list for a fit */
     if ((bp = find_fit(asize)) != NULL) {
+	SAY2("DEBUG: mm_malloc calling place(%p, %i)\n", bp, asize);
 	place(bp, asize);
+	SAY1("DEBUG: mm_malloc returning %p\n", bp);
 	return bp;
     }
 
@@ -202,7 +204,9 @@ void *mm_malloc(size_t size)
     extendsize = MAX(asize,CHUNKSIZE);
     if ((bp = extend_heap(extendsize/WSIZE)) == NULL)  
 	return NULL;
+	SAY2("DEBUG: mm_malloc calling place(%p, %i)\n", bp, asize);
     place(bp, asize);
+	SAY1("DEBUG: mm_malloc returning %p\n", bp);
     return bp;
 } 
 
@@ -288,6 +292,7 @@ static void *coalesce(void *bp)
 	SAY1("DEBUG: coalesce: returning bp:[%p]\n", bp);
 	SAY0("DEBUG: coalesce: calling mm_check after list_add\n");
 	HC()
+	PL()
     return bp;
 }
 
@@ -414,7 +419,8 @@ static int list_add(void* bp)
 		SAY0("DEBUG: list_add: free_p and free_lastp set\n");
 		PUT(NEXT_FREE(bp), 0);
 		PUT(PREV_FREE(bp), 0);
-		
+		SAY("DEBUG: list_add printing before return\n");
+		PL()
 		SAY0("DEBUG: list_add: returning 1! Hooray!\n");
 		SAY2("Should be true: %i | %p\n", GET(NEXT_FREE(bp)) == 0, GET(NEXT_FREE(bp)));
 		return 1;
@@ -423,9 +429,9 @@ static int list_add(void* bp)
 	{
 		SAY0("DEBUG: list_add: list wasn't empty; inserting into list\n");
 		void* old_next = NEXT_FREE(free_p);
-		SET(NEXT_FREE(free_p), bp);
-		SET(NEXT_FREE(bp), old_next);
-		SET(PREV_FREE(bp), free_p);
+		PUT(NEXT_FREE(free_p), bp);
+		PUT(NEXT_FREE(bp), old_next);
+		PUT(PREV_FREE(bp), free_p);
 		free_lastp = old_next;
 		SAY0("DEBUG: list_add: returning 1! Hooray!\n");
 		PL()
@@ -443,20 +449,32 @@ static int list_add(void* bp)
 
 static int list_rm(void* bp)
 {	/* If list is empty */
+	SAY1("DEBUG: list_rm removing %p\n", bp);
 	PL()
 	if (free_p == NULL)
 	{
+		SAY1("DEBUG: free_p was null, returning fail %p\n", free_p);
 		return 0;
 	}
 	/* Insert at beginning of list */
 
+	if(GET(NEXT_FREE(bp)) == 0)
+	{
+		SAY("bp was only one in list. Removing. \n");
+		free_p == NULL;
+		return 1;
+	}
+	
+	SAY0("DEBUG: list_rm initialize pointers\n");
 	void* next = NEXT_FREE(bp);
 	void* prev = PREV_FREE(bp);
-	SET(PREV_FREE(next), GET(prev));
-	SET(NEXT_FREE(prev), GET(next));
+	SAY0("DEBUG: list_rm set PREV/NEXT\n");
+	PUT(PREV_FREE(next), GET(prev));
+	PUT(NEXT_FREE(prev), GET(next));
 	
-	SET(PREV_FREE(bp), NULL);
-	SET(NEXT_FREE(bp), NULL);
+	SAY0("DEBUG: list_rm set curr to NULL\n");
+	PUT(PREV_FREE(bp), NULL);
+	PUT(NEXT_FREE(bp), NULL);
 	PL()
 	return 1;
 }
@@ -481,6 +499,7 @@ static void place(void *bp, size_t asize)
 	PUT(FTRP(bp), PACK(csize-asize, 0));
 	
 	/* Add this block slice to the free list */
+	if (list_rm(bp)) SAY1("DEBUG: place: calling coalesce on %p\n", bp);
 	coalesce(bp);
     }
     else { 
@@ -514,13 +533,7 @@ static void *find_fit(size_t asize)
 static void printlist()
 {
 	void *bp = free_p;
-	SAY1("printlist ------------- %p\n", bp);
-	if (bp !=NULL) 
-	{
-		SAY("bp is not null!\n");
-		printblock(bp);
-		
-	}
+	SAY1("Printing Free List ------------- %p\n", bp);
     for (bp = free_p; bp != NULL; bp = GET(NEXT_FREE(bp))) {
 		SAY1("Got here %p\n", bp);
 			printblock(bp);
@@ -545,7 +558,7 @@ static void printblock(void *bp)
 	return;
     }
 
-	SAY7("%p: header: [%i:%c] footer: [%i:%c]\n n:%p p:%p\n", bp, 
+	SAY7("---- | %p: header: [%i:%c] footer: [%i:%c]\n---- | n:%p p:%p\n", bp, 
 	hsize, (halloc ? 'a' : 'f'), 
 	fsize, (falloc ? 'a' : 'f'),
 	next,
