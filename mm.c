@@ -106,6 +106,7 @@ static void checkblock(void *bp);
 
 /* TODO: Functions we want to make */
 
+void mm_check(int verbose);
 /* Print our free block list(s) */
 static void list_print(void);
 /* Add to list, return 1 if success and 0 if fail */
@@ -123,15 +124,17 @@ static int combine(void* bp, void* bp2);
 int mm_init(void) 
 {
     /* Create the initial empty heap */
-    if ((heap_listp = mem_sbrk(6*WSIZE)) == (void *)-1)
+    if ((heap_listp = mem_sbrk(8*WSIZE)) == (void *)-1)
 	return -1;
     PUT(heap_listp, 0);                          /* Alignment padding */
     PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1)); /* Prologue header */ 
     PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1)); /* Prologue footer */ 
     PUT(heap_listp + (3*WSIZE), PACK(0, 1));     /* Epilogue header */
-    heap_listp += (2*WSIZE);
+    heap_listp += (6*WSIZE);
 	
+	static void* heap_lastp = heap_listp;
 	static void* free_p = NULL;
+	static void* free_lastp = NULL;
 
     /* Extend the empty heap with a free block of CHUNKSIZE bytes */
     if (extend_heap(CHUNKSIZE/WSIZE) == NULL)
@@ -356,6 +359,20 @@ static void *extend_heap(size_t words)
 /* Add to list, return 1 if success and 0 if fail */
 static int list_add(void* bp)
 {
+	/* list add needs to handle the following cases:
+		- The list has not yet been initialized
+		- The list has been initialized
+			- There is a free block that is too big (CALL place)
+			- There is not a free block big enough
+		*/
+		
+	if (free_p == NULL)
+	{
+		free_p = bp;
+		
+	}
+	
+	
 	return 0;
 }
 
