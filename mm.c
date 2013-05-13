@@ -60,7 +60,7 @@ team_t team = {
 #define PREV_FREE(bp) 	(void *)(bp + WSIZE)
 
 /* Set and retrieve free pointers */
-#define SET(p, val)		(*(unsigned int *)(p) = (val))
+#define SET(p, val)		(*(unsigned int *)(p) = val)
 #define GET_PTR(p)		(void *)(p)
 
 /* DEBUG: 1 if true, 0 if false. Will say more things if true.*/
@@ -68,7 +68,7 @@ team_t team = {
 
 /* Epic macros for SAY */
 #define SAY0(fmt)		{if(DEBUG){printf(fmt); fflush(stdout);}}
-#define SAY1(fmt,parm1)	{if(DEBUG){printf(fmt),parm1; fflush(stdout);}}
+#define SAY1(fmt,parm1)	{if(DEBUG){printf(fmt,parm1); fflush(stdout);}}
 #define SAY2(fmt,parm1,parm2)	{if(DEBUG){printf(fmt,parm1,parm2); fflush(stdout);}}
 #define SAY3(fmt,parm1,parm2,parm3)	{if(DEBUG){printf(fmt,parm1,parm2,parm3); fflush(stdout);}}
 #define SAY4(fmt,parm1,parm2,parm3,parm4)	{if(DEBUG){printf(fmt,parm1,parm2,parm3,parm4); fflush(stdout);}}
@@ -134,15 +134,19 @@ int mm_init(void)
     /* Create the initial empty heap */
     if ((heap_listp = mem_sbrk(8*WSIZE)) == (void *)-1)
 		return -1;
+		
+	heap_lastp = heap_listp;
+	free_p = NULL;
+	free_lastp = NULL;
+	// one block here is unused
+    heap_listp += (4*WSIZE);
+	
     PUT(heap_listp, 0);                          /* Alignment padding */
     PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1)); /* Prologue header */ 
     PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1)); /* Prologue footer */ 
     PUT(heap_listp + (3*WSIZE), PACK(0, 1));     /* Epilogue header */
-    heap_listp += (6*WSIZE);
-	
-	heap_lastp = heap_listp;
-	free_p = NULL;
-	free_lastp = NULL;
+    heap_listp += (2*WSIZE);
+
 
 	SAY0("DEBUG: mm_init: calling extend_heap\n");
     /* Extend the empty heap with a free block of CHUNKSIZE bytes */
@@ -273,6 +277,8 @@ static void *coalesce(void *bp)
 	/* add new block to the free list */
 	list_add(bp);
 	SAY1("DEBUG: coalesce: returning bp:[%p]\n", bp);
+	SAY0("DEBUG: coalesce: calling mm_check after list_add\n");
+	mm_check(1);
     return bp;
 }
 
@@ -410,7 +416,7 @@ static int list_add(void* bp)
 	else
 	{
 		SAY0("DEBUG: list_add: list wasn't empty; inserting into list");
-		void* old_next = GET(NEXT_FREE(free_p));
+		void* old_next = GET_PTR(NEXT_FREE(free_p));
 		SET(NEXT_FREE(free_p), bp);
 		SET(NEXT_FREE(bp), old_next);
 		SET(PREV_FREE(bp), free_p);
