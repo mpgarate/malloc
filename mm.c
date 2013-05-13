@@ -68,7 +68,7 @@ team_t team = {
 #define DEBUG	0
 
 /* Call heapchecker */
-#define	HC {if(DEBUG)mm_check(0);fflush(stdout);}
+#define	HC() {if(DEBUG)mm_check(0);fflush(stdout);}
 
 
 /* Epic macros for SAY */
@@ -169,7 +169,7 @@ void *mm_malloc(size_t size)
 {
 	SAY1("DEBUG: mm_malloc: mm_malloc called for (%u)\n", size);
 	SAY0("DEBUG: mm_malloc: calling mm_check(0)\n")
-	mm_check(0);
+	HC()
 	size_t asize;      /* Adjusted block size */
     size_t extendsize; /* Amount to extend heap if no fit */
     char *bp;      
@@ -283,7 +283,7 @@ static void *coalesce(void *bp)
 	list_add(bp);
 	SAY1("DEBUG: coalesce: returning bp:[%p]\n", bp);
 	SAY0("DEBUG: coalesce: calling mm_check after list_add\n");
-	mm_check(1);
+	HC()
     return bp;
 }
 
