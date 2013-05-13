@@ -418,13 +418,29 @@ static int list_add(void* bp)
 		return 1;
 		*/
 
-/* Delete to list, return 1 if success and 0 if fail */
-/* NOTE: list_rm should not call coalesce */
+/* Delete a block from the free list
+*  return 1 if success and 0 if fail 
+* NOTE: list_rm should not call coalesce */
+
 static int list_rm(void* bp)
-{
+{	/* If list is empty */
+	if (free_p == NULL)
+	{
+		return 1;
+	}
+	/* Insert at beginning of list */
+
+	void* next = (void*)RET(NEXT_FREE(bp));
+	void* prev = (void*)RET(PREV_FREE(bp));
+	
+	SET(PREV_FREE(next), GET(prev));
+	SET(NEXT_FREE(prev), GET(next));
+	
+	SET(PREV_FREE(bp), GET(NULL));
+	SET(NEXT_FREE(bp), GET(NULL));
+	
 	return 0;
 }
-
 /* 
  * place - Place block of asize bytes at start of free block bp 
  *         and split if remainder would be at least minimum block size
