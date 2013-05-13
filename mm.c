@@ -41,7 +41,7 @@ team_t team = {
 
 /* Read and write a word at address p */
 #define GET(p)       (*(unsigned int *)(p))
-#define PUT(p, val)  (*(unsigned int *)(p) = (val))
+#define PUT(p, val)  	(*(unsigned int *)(p) = (val))
 
 /* Read the size and allocated fields from address p */
 #define GET_SIZE(p)  (GET(p) & ~0x7)
@@ -56,11 +56,11 @@ team_t team = {
 #define PREV_BLKP(bp)  ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
 /*  macros for free block pointers */
-#define NEXT_FREE(bp)	(void *)(bp)
-#define PREV_FREE(bp) 	(void *)(bp + WSIZE)
+#define NEXT_FREE(bp)	((void *)(bp))
+#define PREV_FREE(bp) 	((void *)(bp + WSIZE))
 
 /* Set and retrieve free pointers */
-#define SET(p, val)		(*(unsigned int *)(p) = (unsigned int)val)
+#define SET(p, val)		(*(unsigned int *)(p) = (val))
 #define GET_PTR(p)		(void *)(p)
 
 
@@ -69,6 +69,7 @@ team_t team = {
 
 /* Call heapchecker */
 #define	HC() {if(DEBUG)mm_check(0);fflush(stdout);}
+#define	PL() {if(DEBUG)printlist();;fflush(stdout);}
 
 
 /* Epic macros for SAY */
@@ -121,6 +122,8 @@ static int list_add(void* bp);
 static int list_rm(void* bp);
 /* NOTE: We're skipping this for now. Combine two adjacent free blocks */
 //static int combine(void* bp, void* bp2);
+/* Print the list */
+static void printlist();
 
 
 /* Our global variables */
@@ -240,7 +243,7 @@ static void *coalesce(void *bp)
 	/* Check if free AND not from extend heap, and then remove from list. This lets us call it from both mm_free, extend_heap, and place */
 	
 	/* Get NEXT_FREE as an unsigned int so that we can compare it to DEADBEEF */
-	if(!GET_ALLOC(FTRP(bp)))
+	if(GET_ALLOC(FTRP(bp)))
 	{
 		SAY1("DEBUG: coalesce: ERROR: tried to remove allocated block bp:[%p] from list\n",bp)
 		list_rm(bp);
@@ -394,6 +397,7 @@ static void *extend_heap(size_t words)
 
 static int list_add(void* bp)
 {
+	PL()
 	SAY0("DEBUG: list_add: entering\n");
 	/* list add needs to handle the following cases:
 		- The list has not yet been initialized
@@ -405,26 +409,34 @@ static int list_add(void* bp)
 	if (free_p == NULL)
 	{
 		SAY0("DEBUG: list_add: list was empty; creating list\n");
-		free_p = bp;
-		free_lastp = bp;
+		free_p = &bp;
+		free_lastp = &bp;
 		SAY0("DEBUG: list_add: free_p and free_lastp set\n");
-		SET(NEXT_FREE(free_p), 0x0);
-		SET(PREV_FREE(free_p), 0x0);
+		SET(NEXT_FREE(bp), 0xDEADBEEF);
+		SET(PREV_FREE(bp), 0xDEADBEEF);
+		
+		//#define SET(p, val)		((p) = (unsigned int *)(val))
+		
+		//bp = (unsigned int *)0xDEADBEEF;
+		
 		SAY0("DEBUG: list_add: returning 1! Hooray!\n");
+		SAY2("Should be true: %i | %p\n", (NEXT_FREE(bp) == 0xDEADBEEF), NEXT_FREE(bp));
 		return 1;
 	}
 	else
 	{
 		SAY0("DEBUG: list_add: list wasn't empty; inserting into list\n");
-		void* old_next = GET_PTR(NEXT_FREE(free_p));
+		void* old_next = NEXT_FREE(free_p);
 		SET(NEXT_FREE(free_p), bp);
 		SET(NEXT_FREE(bp), old_next);
 		SET(PREV_FREE(bp), free_p);
 		free_lastp = old_next;
 		SAY0("DEBUG: list_add: returning 1! Hooray!\n");
+		PL()
 		return 1;
 	}
 	SAY0("DEBUG: list_add: returning 0 :-(\n");
+	PL()
 	return 0;
 }
 
@@ -435,20 +447,21 @@ static int list_add(void* bp)
 
 static int list_rm(void* bp)
 {	/* If list is empty */
+	PL()
 	if (free_p == NULL)
 	{
 		return 0;
 	}
 	/* Insert at beginning of list */
 
-	void* next = GET_PTR(NEXT_FREE(bp));
-	void* prev = GET_PTR(PREV_FREE(bp));
+	void* next = NEXT_FREE(bp);
+	void* prev = PREV_FREE(bp);
 	SET(PREV_FREE(next), GET(prev));
 	SET(NEXT_FREE(prev), GET(next));
 	
 	SET(PREV_FREE(bp), NULL);
 	SET(NEXT_FREE(bp), NULL);
-	
+	PL()
 	return 1;
 }
 /* 
@@ -461,9 +474,9 @@ static void place(void *bp, size_t asize)
 {
     size_t csize = GET_SIZE(HDRP(bp));
 
-	SAY1("DEBUG: place: calling list_rm on %p\n", bp);
+	SAY1("DEBUG: placing %p\n", bp);
 	
-	list_rm(bp);
+	if (list_rm(bp)) SAY1("DEBUG: place: removed %p\n", bp);
     if ((csize - asize) >= (2*DSIZE)) {
 	PUT(HDRP(bp), PACK(asize, 1));
 	PUT(FTRP(bp), PACK(asize, 1));
@@ -492,9 +505,9 @@ static void *find_fit(size_t asize)
 {
     /* First fit search */
     void *bp;
-    for (bp = GET_PTR(NEXT_FREE(free_p)); NEXT_FREE(bp) != NULL; bp = GET_PTR(NEXT_FREE(bp))) {
+    for (bp = NEXT_FREE(free_p); bp != NULL; bp = NEXT_FREE(bp)) {
 		if (asize <= GET_SIZE(HDRP(bp))) {
-			SAY3("We got one: asize: %i, %p: %i\n", asize, bp, GET_SIZE(HDRP(bp)) );
+			SAY4("DEBUG: find_fit: found for asize: %i, %p: %i, %i\n", asize, bp, GET_SIZE(HDRP(bp)), GET_ALLOC(HDRP(bp)));
 			if (list_rm(bp)) SAY("We removed it\n");
 			return bp;
 		}
@@ -502,23 +515,45 @@ static void *find_fit(size_t asize)
     return NULL; /* No fit */
 }
 
+static void printlist()
+{
+	void *bp = free_p;
+	SAY1("printlist ------------- %p\n", bp);
+	if (bp !=NULL) 
+	{
+		SAY("bp is not null!\n");
+		printblock(bp);
+		
+	}
+    for (bp = free_p; bp != NULL; bp = NEXT_FREE(bp)) {
+		SAY1("Got here %p\n", bp);
+			printblock(bp);
+		}
+
+}
+
 static void printblock(void *bp) 
 {
     size_t hsize, halloc, fsize, falloc;
-
+	void* next;
+	void* prev;
     hsize = GET_SIZE(HDRP(bp));
     halloc = GET_ALLOC(HDRP(bp));  
     fsize = GET_SIZE(FTRP(bp));
-    falloc = GET_ALLOC(FTRP(bp));  
+    falloc = GET_ALLOC(FTRP(bp)); 
+	next = NEXT_FREE(bp);
+	prev = PREV_FREE(bp);
 
     if (hsize == 0) {
 	printf("%p: EOL\n", bp);
 	return;
     }
 
-	//SAY5("%p: header: [%p:%c] footer: [%p:%c]\n", bp, 
-	//hsize, (halloc ? 'a' : 'f'), 
-	//fsize, (falloc ? 'a' : 'f'));
+	SAY7("%p: header: [%i:%c] footer: [%i:%c]\n n:%p p:%p\n", bp, 
+	hsize, (halloc ? 'a' : 'f'), 
+	fsize, (falloc ? 'a' : 'f'),
+	next,
+	prev);
 }
 
 static void checkblock(void *bp) 
