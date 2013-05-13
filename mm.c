@@ -16,7 +16,7 @@
 
 team_t team = {
 	/* Team name */
-	"instructors",
+	"Super Secret NSA Hacker Team",
 	/* First member's full name */
 	"Michael Garate",
 	/* First member's NYU NetID */
