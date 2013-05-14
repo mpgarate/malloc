@@ -1,10 +1,17 @@
 /* 
- * Simple, 32-bit and 64-bit clean allocator based on implicit free
- * lists, first fit placement, and boundary tag coalescing, as described
- * in the CS:APP2e text. Blocks must be aligned to doubleword (8 byte) 
- * boundaries. Minimum block size is 16 bytes. 
- * 		something
- * Book code found here: http://csapp.cs.cmu.edu/public/code.html
+ * Simple, 32-bit and 64-bit clean allocator based on explicit free
+ * lists, best fit placement, and boundary tag coalescing. 
+ * Based from book code found here: http://csapp.cs.cmu.edu/public/code.html
+ * 
+ * An allocated block has a one word header and footer. Both of these contain
+ * the size of the block and a bit to state whether allocated or free.
+ *
+ * A free block contains the same header and footer as an allocated block,
+ * and additionally has two one-word sized blocks containing pointers to the next
+ * and previous blocks in that list. 
+ *
+ * This free list is organized in reverse order of insertion. 
+ * 
  */
  
 #include <stdio.h>
@@ -106,6 +113,8 @@ void doAssert(int c)
 /* Global variables */
 static char *heap_listp = 0;  /* Pointer to first block */
 static char *heap_lastp = 0; /* pointer to last free block */
+static void* free_p;		/* Point to first free list item */
+static void* free_lastp;	/* Point to last free list item*/
 
 /* Function prototypes for internal helper routines */
 static void *extend_heap(size_t words);
@@ -118,29 +127,18 @@ static void checkblock(void *bp);
 /* TODO: Functions we want to make */
 
 void mm_check(int verbose);
-/* Print our free block list(s) */
-//tatic void list_print(void);
 /* Add to list, return 1 if success and 0 if fail */
 static int list_add(void* bp); 
 /* Delete to list, return 1 if success and 0 if fail */
-/* NOTE: list_rm should not call coalesce */
 static int list_rm(void* bp);
-/* NOTE: We're skipping this for now. Combine two adjacent free blocks */
-//static int combine(void* bp, void* bp2);
 /* Print the list */
 static void printlist();
 /* Check if block is in the list */
 static int list_search(void* bp);
 
-/* Our global variables */
-
-
-/* TODO: update this value in extend_heap AND place AND anywhere else? */
-static void* free_p;		/* Point to first free list item */
-static void* free_lastp;	/* Point to last free list item*/
-
 /* 
- * mm_init - Initialize the memory manager 
+ * mm_init - Initialize the memory manager, setting up lists and getting 
+ * an initial amount of memory with extend_heap. 
  * Based on book code mm.c
  */
 int mm_init(void) 
@@ -179,7 +177,7 @@ int mm_init(void)
 }
 
 /* 
- * mm_malloc - Allocate a block with at least size bytes of payload 
+ * mm_malloc - Allocate a block with at least size bytes of payload. 
  * Based on book code mm.c
  */
 void *mm_malloc(size_t size) 
@@ -397,7 +395,15 @@ void *mm_realloc(void *ptr, size_t size)
 }
 
 /* 
- * check - Based from book code
+ * mm_check - based from book code. Perform various checks on the heap state.
+ * Force program termination upon error and print helpful information.
+ * 
+ * Checks performed:
+ *					* Make sure two adjacent blocks are not free
+ *					* Verify prologue and epilgue headers
+ *					* Check for free blocks not in the free list
+ *					* Check for llocated blocks in the free list
+ *		
  */
 void mm_check(int verbose)
 { 
@@ -412,9 +418,7 @@ void mm_check(int verbose)
 		Assert(0==1);
 	}
     checkblock(heap_listp);
-	//SAY0("DEBUG: mm_check: checking for blocks that have escaped coalescing\n");
     for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-		//SAY1("DEBUG: mm_check: In the loop with bp:[%p]\n", bp);
 		if (verbose) 
 			printblock(bp);
 		checkblock(bp);
@@ -428,8 +432,6 @@ void mm_check(int verbose)
 				Assert(0==1);
 			}
     }
-	//SAY0("DEBUG: mm_check: out of the loop\n");
-
     if (verbose)
 	printblock(bp);
     if ((GET_SIZE(HDRP(bp)) != 0) || !(GET_ALLOC(HDRP(bp))))
@@ -455,10 +457,7 @@ void mm_check(int verbose)
 				Assert(0==1);
 			}
 		}
-	
-	
 		}
-	
 }
 
 /* 
@@ -507,19 +506,11 @@ static void *extend_heap(size_t words)
 
 /* Add to list, return 1 if success and 0 if fail
 	
-	Make sure to update the following variables:
+	Updates block pointers and the following globals:
 	static void* free_p;		 Point to first free list item 
 	static void* free_lastp;	 Point to last free list item
 
  */
-
-/* Add to list, return 1 if success and 0 if fail
-	
-	Make sure to update the following variables:
-	static void* free_p;		 Point to first free list item 
-	static void* free_lastp;	 Point to last free list item
-static int list_add(void* bp)
-*/
 static int list_add(void* bp)
 {
 	SAY("DEBUG: list_add: State of list before list_add:\n");
@@ -565,7 +556,10 @@ return 0;
 
 /* Delete a block from the free list
 *  return 1 if success and 0 if fail 
-* NOTE: list_rm should not call coalesce */
+*
+*	Note: does handle case where block is not in list. 
+*
+ */
 
 static int list_rm(void* bp)
 {	/* If list is empty */
@@ -662,23 +656,8 @@ static void place(void *bp, size_t asize)
 
 /* 
  * find_fit - Find a fit for a block with asize bytes 
+ * Uses best fit strategy. 
  */
- 
- 
- 
-    /* First fit search */
- /*   void *bp;
-    for (bp = NEXT_FREE(free_p); bp != NULL; bp = GET(NEXT_FREE(bp))) {
-		if (asize <= GET_SIZE(HDRP(bp))) {
-			SAY4("DEBUG: find_fit: found for asize: %i, %p: %i, %i\n", asize, bp, GET_SIZE(HDRP(bp)), GET_ALLOC(HDRP(bp)));
-			if (list_rm(bp)) SAY("We removed it\n");
-			return bp;
-		}
-    }
-    return NULL; // no fit
-	
-	*/
- 
  
  /* TODO: make this get fit from free list */
 static void *find_fit(size_t asize)
@@ -721,7 +700,15 @@ static void *find_fit(size_t asize)
 	return best;
 }
 
-
+/* 
+ * list_search:
+ * 
+ * Determine if a block is in the free list. This is O(n) running time, so 
+ * it is not called in a normal malloc/free/realloc session. 
+ *
+ * Used for debugging
+ *
+ */
 static int list_search(void* bp)
 {
 	SAY0("DEBUG: list_search: entering\n");
@@ -756,6 +743,11 @@ static int list_search(void* bp)
 	return 0;
 	}
 
+/*
+ * printlist
+ * loop through items in a free list and call printblock for each.
+ *
+ */
 static void printlist()
 {
 	void *bp = free_p;
@@ -792,9 +784,13 @@ static void printblock(void *bp)
 	prev);
 }
 
+/*
+ * Check the integrity of a given heap block. Helper method for mm_check
+ *
+ */
+
 static void checkblock(void *bp) 
 {
-	//SAY1("DEBUG: checkblock: entering checkblock(%p)\n", bp);
     if ((size_t)bp % 8)
 	{
 		printf("Error: %p is not doubleword aligned\n", bp);
@@ -805,5 +801,4 @@ static void checkblock(void *bp)
 		printf("Error: header does not match footer\n");
 		Assert(0==1);
 	}
-	//SAY1("DEBUG: checkblock: exiting checkblock(%p)\n", bp);
 }
