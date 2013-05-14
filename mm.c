@@ -69,7 +69,7 @@ team_t team = {
 #define BP_TO_PREV_FREE(bp) (((void**)bp)[1])
 
 /* DEBUG: 1 if true, 0 if false. Will say more things if true.*/
-#define DEBUG	1
+#define DEBUG	0
 
 /* Call heapchecker */
 #define	CHEAP() {if(DEBUG)mm_check(0);fflush(stdout);}
@@ -226,6 +226,7 @@ void *mm_malloc(size_t size)
     if ((bp = extend_heap(extendsize/WSIZE)) == NULL)  
 		return NULL;
 	SAY2("DEBUG: mm_malloc calling place(%p, %i)\n", bp, asize);
+	list_rm(bp);
     place(bp, asize);
 	SAY1("DEBUG: mm_malloc returning %p\n", bp);
 	SAY("DEBUG: mm_malloc printing list:\n");
@@ -263,7 +264,7 @@ void mm_free(void *bp)
 	
 	/* TODO: addToList is called from within coalesce */
     coalesce(bp);
-	SAY("DEBUG: mm_free: removed block [%bp]\n");
+	SAY1("DEBUG: mm_free: removed block [%p]\n", bp);
 	PLIST()
 	CHEAP()
 }
@@ -294,6 +295,8 @@ static void *coalesce(void *bp)
     if (prev_alloc && next_alloc) {            /* Case 1 */
 		SAY1("DEBUG: coalesce: [%p] does not need to be merged. Adding to list and returning\n", bp);
 		list_add(bp);
+		SAY1("DEBUG: coalesce: printing list and returning [%p]\n", bp);
+		PLIST()
 		return bp;
     }
 
@@ -471,11 +474,11 @@ static void *extend_heap(size_t words)
 	SAY1("DEBUG: extend_heap: calling coalesce(%p)\n", bp);
 	bp = coalesce(bp);
 	
-	SAY("DEBUG: extend_heap: calling PLIST()\n");
+	SAY("DEBUG: extend_heap: done. calling PLIST()\n");
 	PLIST()
-	SAY("DEBUG: extend_heap: calling CHEAP()\n");
+	SAY("DEBUG: extend_heap: done. calling CHEAP()\n");
 	CHEAP()
-	
+	SAY1("DEBUG: extend_heap: done. returning [%p]\n", bp);
 	return bp;
 }
 
@@ -609,8 +612,9 @@ static int list_rm(void* bp)
 static void place(void *bp, size_t asize)
 
 {
+	
+	
     size_t csize = GET_SIZE(HDRP(bp));
-
 	SAY1("DEBUG: placing %p\n", bp);
 	
     if ((csize - asize) >= (2*DSIZE)) {
@@ -628,8 +632,8 @@ static void place(void *bp, size_t asize)
 		{
 			heap_lastp = bp;
 			SAY1("DEBUG: place: calling coalesce on %p\n", bp);
-			coalesce(bp);
 		}
+	coalesce(bp);
 	}
     else { 
 	PUT(HDRP(bp), PACK(csize, 1));
@@ -702,15 +706,13 @@ static void *find_fit(size_t asize)
 
 static int list_search(void* bp)
 {
-	//SAY0("DEBUG: list_search: entering\n");
+	SAY0("DEBUG: list_search: entering\n");
 	
 	/* Check if list is uninitialized */
 	if (free_p == NULL) return 0; /* Not in the list */
 	
-	
 	void * lp = free_p;
-	
-	//SAY2("DEBUG: list_search: lp is %p, bp is %p \n", lp, bp);
+	SAY2("DEBUG: list_search: lp is %p, bp is %p \n", lp, bp);
 	
 	if (bp == NULL)
 	{
@@ -724,15 +726,15 @@ static int list_search(void* bp)
 	}
 	
 	//SAY1("DEBUG: loop: lpget is %p \n", NEXT_FREE(lp));
-	while(BP_TO_NEXT_FREE(bp) != NULL)
+	while(BP_TO_NEXT_FREE(lp) != NULL)
 	{
-		bp = BP_TO_NEXT_FREE(bp);
+		lp = BP_TO_NEXT_FREE(lp);
 		//SAY1("DEBUG: list_search: looping, lp is %p \n", lp);
-		lp = bp;
 		if (bp == lp) { 	/* We have found a match */
 			return 1;
 		}
 	}
+		//SAY("DEBUG: list_search: did not find matching blocks in loop.\n");
 	return 0;
 	}
 
@@ -740,7 +742,7 @@ static void printlist()
 {
 	void *bp = free_p;
 	SAY("DEBUG: ------------- Printing Free List -------------\n");
-	SAY2("free_p: [%p] free_lastp: [%p]\n", free_p, free_lastp);
+	SAY2("DEBUG: free_p: [%p] free_lastp: [%p]\n", free_p, free_lastp);
     for (bp = free_p; bp != NULL; bp = BP_TO_NEXT_FREE(bp)) {
 			//SAY1("DEBUG: printlist: in the loop and bp is [%p]\n", bp);
 			printblock(bp);
