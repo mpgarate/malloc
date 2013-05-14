@@ -191,7 +191,7 @@ void *mm_malloc(size_t size)
 	PLIST()
 	CHEAP()
 	size_t asize;      /* Adjusted block size */
-    size_t extendsize; /* Amount to extend heap if no fit */
+    size_t extendsize = 0; /* Amount to extend heap if no fit */
     char *bp;
 
     if (heap_listp == 0){
@@ -222,7 +222,10 @@ void *mm_malloc(size_t size)
     }
 
     /* No fit found. Get more memory and place the block */
-    extendsize = MAX(asize,CHUNKSIZE);
+    
+
+	
+	extendsize = MAX(asize,CHUNKSIZE);
     if ((bp = extend_heap(extendsize/WSIZE)) == NULL)  
 		return NULL;
 	SAY2("DEBUG: mm_malloc calling place(%p, %i)\n", bp, asize);
