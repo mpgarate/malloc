@@ -508,41 +508,37 @@ static int list_rm(void* bp)
 	}
 	
 	if (free_p == bp && last_p == bp) 
-	{ /* it's the one in the list */
+	{ /* it's the only one in the list */
 		free_p = NULL;
 		last_p = NULL;
 		return;
 	}
 	
-	if (BP_TO_PREV_FREE(bp) != NULL)
-	{ /* it's not the first one in the list */
-		void* bp_of_prev = BP_TO_PREV_FREE(bp);
-		PB_TO_NEXT_FREE(bp_prev) = BP_TO_NEXT_FREE(bp);
-	}
-	else if (BP_TO_NEXT_FREE(bp) != NULL ) /* it's not the last one in the list */
+	/* else if it's first one in list	*/
+	if (free_p == bp)
+	{
 		void* bp_of_next = BP_TO_NEXT_FREE(bp);
-		BP_TO_PREV_FREE(bp_of_next) = BP_TO_PREV_FREE(bp);
-	}
-
-	//if (BP_TO_NEXT_FREE(bp) != NULL) 
-	//{ 
-	//	void* bp_of_next = BP_TO_NEXT_FREE(bp);
-	//	BP_TO_NEXT_FREE(bp) = NULL;
-	//}
-	
-	/* if it's the last one in list */
-	else if (last_p == bp)
-	{
-		void* prev_of_bp = BP_TO_PREV_FREE(bp);
-		last_p = BP_TO_PREV_FREE(bp);
-		BP_TO_NEXT_FREE(next_of_bp) = NULL;
-	} 
-	else
-	{
-	
+		free_p = bp_of_next;
+		BP_TO_PREV_FREE(bp_of_next) = NULL;
+		return;
 	}
 	
-	return 1;
+	/* else if it's the last one in the list */
+	if (last_p == bp)
+	{
+		void* bp_of_prev = BP_TO_PREV_FREE(bp);
+		last_p = bp_of_prev;
+		BP_TO_NEXT_FREE(bo_of_prev);
+		return;
+	}
+	/* else it's in the middle */
+ 	
+	void* bp_of_prev = BP_TO_PREV_FREE(bp);
+	void* bp_of_next = BP_TO_NEXT_FREE(bp);
+	BP_TO_PREV_FREE(bp_of_next) = BP_TO_PREV_FREE(bp);
+	PB_TO_NEXT_FREE(bp_of_prev) = BP_TO_NEXT_FREE(bp);
+	
+	return 0;
 }
 /* 
  * place - Place block of asize bytes at start of free block bp 
