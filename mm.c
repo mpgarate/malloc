@@ -72,7 +72,7 @@ team_t team = {
 #define DEBUG	1
 
 /* Call heapchecker */
-#define	CHEAP() {if(DEBUG)mm_check(1);fflush(stdout);}
+#define	CHEAP() {if(DEBUG)mm_check(0);fflush(stdout);}
 #define	PLIST() {if(DEBUG)printlist();;fflush(stdout);}
 
 
@@ -200,6 +200,7 @@ void *mm_malloc(size_t size)
     /* Search the free list for a fit */
     if ((bp = find_fit(asize)) != NULL) {
 		SAY2("DEBUG: mm_malloc calling place(%p, %i)\n", bp, asize);
+		list_rm(bp);
 		place(bp, asize);
 		SAY1("DEBUG: mm_malloc returning %p\n", bp);
 		return bp;
@@ -271,7 +272,7 @@ static void *coalesce(void *bp)
     else if (prev_alloc && !next_alloc) {      /* Case 2 */
 	
 	/* Remove the block to be merged from the list. It's ok if it isn't there. */
-	list_rm(NEXT_BLKP(bp));
+	//list_rm(NEXT_BLKP(bp));
 	size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
 	PUT(HDRP(bp), PACK(size, 0));
 	PUT(FTRP(bp), PACK(size,0));
@@ -421,7 +422,7 @@ static void *extend_heap(size_t words)
 	SAY0("DEBUG: extend_heap: calling coalesce\n");
     /* Coalesce if the previous block was free */
 	heap_lastp = bp;
-	list_add(bp);
+	//list_add(bp);
     return coalesce(bp);
 }
 
@@ -502,7 +503,7 @@ static int list_greater_than_1()
 static int list_rm(void* bp)
 {	/* If list is empty */
 	SAY1("DEBUG: list_rm removing %p\n", bp);
-	PLIST()
+	//PLIST()
 	if (free_p == NULL)
 	{
 		SAY1("DEBUG: free_p was null, returning fail %p\n", free_p);
@@ -551,7 +552,7 @@ static void place(void *bp, size_t asize)
 
 	SAY1("DEBUG: placing %p\n", bp);
 	
-	//if (list_rm(bp)) SAY1("DEBUG: place: removed %p\n", bp);
+	if (list_rm(bp)) SAY1("DEBUG: place: removed %p\n", bp);
     if ((csize - asize) >= (2*DSIZE)) {
 	PUT(HDRP(bp), PACK(asize, 1));
 	PUT(FTRP(bp), PACK(asize, 1));
@@ -560,7 +561,7 @@ static void place(void *bp, size_t asize)
 	PUT(FTRP(bp), PACK(csize-asize, 0));
 	
 	/* Add this block slice to the free list */
-	if (list_rm(bp)) SAY1("DEBUG: place: calling coalesce on %p\n", bp);
+	SAY1("DEBUG: place: calling coalesce on %p\n", bp);
 	if (bp > heap_lastp) heap_lastp = bp;
 	coalesce(bp);
     }
@@ -628,18 +629,19 @@ static int list_search(void* bp)
 	
 	
 	if (bp == lp) { 		/* We have found a match */
-			SAY0("DEBUG: list_search: we have found a match | returning\n")
+			//SAY0("DEBUG: list_search: we have found a match | returning\n")
 			return 1;
 			}
 	if (bp == NULL)
 	{
-		SAY1("DEBUG: list_search: lp was null \n", lp);
+		//SAY1("DEBUG: list_search: lp was null %p \n", lp);
 		return 0; /* not in the list */
 	}
 	//SAY1("DEBUG: loop: lpget is %p \n", NEXT_FREE(lp));
-	while((bp = BP_TO_NEXT_FREE(bp)) != NULL)
+	while(bp != NULL)
 	{
-		SAY1("DEBUG: list_search: looping, lp is %p \n", lp);
+		bp = BP_TO_NEXT_FREE(bp);
+		//SAY1("DEBUG: list_search: looping, lp is %p \n", lp);
 		lp = bp;
 		if (bp == lp) { 	/* We have found a match */
 			return 1;
