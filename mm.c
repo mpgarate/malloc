@@ -177,7 +177,7 @@ int mm_init(void)
 void *mm_malloc(size_t size) 
 {
 	SAY1("DEBUG: mm_malloc: mm_malloc called for (%u)\n", size);
-	SAY0("DEBUG: mm_malloc: calling mm_check(1)\n")
+	SAY0("DEBUG: mm_malloc: calling mm_check(0)\n")
 	CHEAP()
 	size_t asize;      /* Adjusted block size */
     size_t extendsize; /* Amount to extend heap if no fit */
@@ -443,54 +443,41 @@ static void *extend_heap(size_t words)
 
  */
 
+/* Add to list, return 1 if success and 0 if fail
+	
+	Make sure to update the following variables:
+	static void* free_p;		 Point to first free list item 
+	static void* free_lastp;	 Point to last free list item
+static int list_add(void* bp)
+*/
 static int list_add(void* bp)
 {
-	PLIST()
-	SAY0("DEBUG: list_add: entering\n");
-	/* list add needs to handle the following cases:
-		- The list has not yet been initialized
-		- The list has been initialized
-			- There is a free block that is too big (CALL place)
-			- There is not a free block big enough
-		*/
-	SAY0("DEBUG: list_add: checking if list is empty\n");
-	if (GET_PTR(free_p) == NULL)
+	/* If list is empty */
+	if (free_p == (void*)NULL)
 	{
-		SAY0("DEBUG: list_add: list was empty; creating list\n");
+		/* Create list */
 		free_p = bp;
-		free_lastp = bp;
-		SAY0("DEBUG: list_add: free_p and free_lastp set\n");
-		PUT(NEXT_FREE(bp), 0);
-		PUT(PREV_FREE(bp), 0);
-		SAY("DEBUG: list_add printing before return\n");
-		PLIST()
-		SAY0("DEBUG: list_add: returning 1! Hooray!\n");
-		SAY2("Should be true: %i | %p\n", BP_TO_NEXT_FREE(bp) == 0, BP_TO_NEXT_FREE(bp));
+		free_lastp = bp; /* last free block */
+		
+		/* If the list is empty, the block's next and previous pointers should be NULL */
+		
+		BP_TO_PREV_FREE(bp) = NULL; 
+		BP_TO_NEXT_FREE(bp) = NULL;
+
 		return 1;
 	}
 	else
 	{
-		SAY0("DEBUG: list_add: list wasn't empty; inserting into list\n");
+		/*list wasn't empty; inserting into the beginning of the list */
 		
-		void* old_next = free_p;
+		void* old_first = free_p;
 		
-		SAY0("DEBUG: list_add: setting next.prev\n");
-		PUT(PREV_FREE(old_next), bp);
-		SAY0("DEBUG: list_add: setting prev.next\n");
-		PUT(NEXT_FREE(bp), old_next);
-		SAY0("DEBUG: list_add: set!\n");
+		BP_TO_PREV_FREE(bp) = NULL; 
+		BP_TO_NEXT_FREE(bp) = old_first;
 		free_p = bp;
 		
-		//PUT(free_p, bp);
-		//PUT(NEXT_FREE(bp), old_next);
-		//PUT(PREV_FREE(bp), free_p);
-		free_lastp = old_next;
-		SAY0("DEBUG: list_add: returning 1! Hooray!\n");
-		PLIST()
 		return 1;
 	}
-	SAY0("DEBUG: list_add: returning 0 :-(\n");
-	PLIST()
 	return 0;
 }
 /*
