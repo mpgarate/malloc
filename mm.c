@@ -63,12 +63,16 @@ team_t team = {
 #define SET(p, val)		(*(unsigned int *)(p) = (val))
 #define GET_PTR(p)		(void *)(p)
 
+/*SOME MORE MACROS*/
+#define BP_TO_SIZE(bp) (((unsigned int *)bp)[-1])
+#define BP_TO_NEXT_FREE(bp) (((void**)bp)[0])
+#define BP_TO_PREV_FREE(bp) (((void**)bp)[1])
 
 /* DEBUG: 1 if true, 0 if false. Will say more things if true.*/
 #define DEBUG	1
 
 /* Call heapchecker */
-#define	CHEAP() {if(DEBUG)mm_check(0);fflush(stdout);}
+#define	CHEAP() {if(DEBUG)mm_check(1);fflush(stdout);}
 #define	PLIST() {if(DEBUG)printlist();;fflush(stdout);}
 
 
@@ -173,7 +177,7 @@ int mm_init(void)
 void *mm_malloc(size_t size) 
 {
 	SAY1("DEBUG: mm_malloc: mm_malloc called for (%u)\n", size);
-	SAY0("DEBUG: mm_malloc: calling mm_check(0)\n")
+	SAY0("DEBUG: mm_malloc: calling mm_check(1)\n")
 	CHEAP()
 	size_t asize;      /* Adjusted block size */
     size_t extendsize; /* Amount to extend heap if no fit */
@@ -348,14 +352,14 @@ void mm_check(int verbose)
     char *bp = heap_listp;
 
     if (verbose)
-	printf("Heap (%p):\n", heap_listp);
+	SAY1("DEBUG: mm_check: Heap (%p):\n", heap_listp);
 
     if ((GET_SIZE(HDRP(heap_listp)) != DSIZE) || !GET_ALLOC(HDRP(heap_listp)))
-	printf("Bad prologue header\n");
+	SAY0("DEBUG: mm_check: ERROR: Bad prologue header\n");
     checkblock(heap_listp);
-
+	SAY0("DEBUG: mm_check: checking for blocks that have escaped coalescing\n");
     for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-	
+		SAY1("DEBUG: mm_check: In the loop with bp:[%p]\n", bp);
 		if (verbose) 
 			printblock(bp);
 		checkblock(bp);
@@ -363,7 +367,7 @@ void mm_check(int verbose)
 		/* Check if two blocks next to each other are free */
 		if(!(GET_ALLOC(HDRP(bp))) && !(GET_ALLOC(HDRP(bp+GET_SIZE(HDRP(bp))))))
 			{
-				printf("Double free block!\n");
+				SAY0("DEBUG: mm_check: Double free block!\n");
 			}
 		
 		if(GET_ALLOC(HDRP(bp)) == list_search(bp))
@@ -380,11 +384,12 @@ void mm_check(int verbose)
 			}
 		}
     }
+	SAY0("DEBUG: mm_check: out of the loop\n");
 
     if (verbose)
 	printblock(bp);
     if ((GET_SIZE(HDRP(bp)) != 0) || !(GET_ALLOC(HDRP(bp))))
-	printf("Bad epilogue header\n");
+	SAY0("DEBUG: mm_check: ERROR: Bad epilogue header\n");
 	
 }
 
@@ -421,6 +426,8 @@ static void *extend_heap(size_t words)
 }
 
 
+
+
 /* Add to list, return 1 if success and 0 if fail
 	
 	Make sure to update the following variables:
@@ -451,7 +458,7 @@ static int list_add(void* bp)
 		SAY("DEBUG: list_add printing before return\n");
 		PLIST()
 		SAY0("DEBUG: list_add: returning 1! Hooray!\n");
-		SAY2("Should be true: %i | %p\n", GET(NEXT_FREE(bp)) == 0, GET(NEXT_FREE(bp)));
+		SAY2("Should be true: %i | %p\n", BP_TO_NEXT_FREE(bp) == 0, BP_TO_NEXT_FREE(bp));
 		return 1;
 	}
 	else
@@ -459,8 +466,12 @@ static int list_add(void* bp)
 		SAY0("DEBUG: list_add: list wasn't empty; inserting into list\n");
 		
 		void* old_next = free_p;
+		
+		SAY0("DEBUG: list_add: setting next.prev\n");
 		PUT(PREV_FREE(old_next), bp);
+		SAY0("DEBUG: list_add: setting prev.next\n");
 		PUT(NEXT_FREE(bp), old_next);
+		SAY0("DEBUG: list_add: set!\n");
 		free_p = bp;
 		
 		//PUT(free_p, bp);
@@ -475,6 +486,13 @@ static int list_add(void* bp)
 	PLIST()
 	return 0;
 }
+/*
+static int list_greater_than_1() 
+{
+	char *bp;
+	
+}
+*/
 
 
 /* Delete a block from the free list
@@ -497,7 +515,7 @@ static int list_rm(void* bp)
 	
 	if(GET_ALLOC(HDRP(bp))) return 1; /* Success! No need to remove from list */
 	
-	if(GET(NEXT_FREE(bp)) == 0)
+	if(BP_TO_NEXT_FREE(bp) == NULL) /*TEST IF LIST IS EMPTY*/
 	{
 		SAY("DEBUG: list_rm: bp was only one in list. Removing. \n");
 		free_p = NULL;
@@ -505,15 +523,17 @@ static int list_rm(void* bp)
 		PLIST()
 		return 1;
 	}
-	
-	SAY0("DEBUG: list_rm initialize pointers\n");
-	void* next = NEXT_FREE(bp);
-	void* prev = PREV_FREE(bp);
-	SAY0("DEBUG: list_rm set PREV/NEXT\n");
-	PUT(PREV_FREE(next), GET(prev));
-	PUT(NEXT_FREE(prev), GET(next));
+	printblock(bp);
+	//SAY0("DEBUG: list_rm initialize pointers\n");
+	//void* next = BP_TO_NEXT_FREE(bp);
+	//void* prev = BP_TO_NEXT_FREE(bp);
+	SAY0("DEBUG: list_rm set prev.next\n");
+	PUT(PREV_FREE(BP_TO_NEXT_FREE(bp)), BP_TO_PREV_FREE(bp));
+	SAY0("DEBUG: list_rm: set next.prev\n");
+	PUT(NEXT_FREE(BP_TO_PREV_FREE(bp)), BP_TO_NEXT_FREE(bp));
 	
 	SAY0("DEBUG: list_rm set curr to NULL\n");
+	/*Next: try replacing PUT with BP_TO macros*/
 	PUT(PREV_FREE(bp), NULL);
 	PUT(NEXT_FREE(bp), NULL);
 	PLIST()
@@ -593,7 +613,7 @@ static void *find_fit(size_t asize)
 			best_size = GET_SIZE(HDRP(bp));
 			best = bp;
 		}
-		bp = (void *)GET(NEXT_FREE(bp));
+		bp = (void *)BP_TO_NEXT_FREE(bp);
 	}
 	return best;
 }
@@ -601,35 +621,39 @@ static void *find_fit(size_t asize)
 
 static int list_search(void* bp)
 {
+	SAY0("DEBUG: list_search: entering\n");
 	void * lp = free_p;
 	
 	//SAY1("DEBUG: list_search: lp is %p \n", lp);
 	
 	
 	if (bp == lp) { 		/* We have found a match */
-				return 1;
+			SAY0("DEBUG: list_search: we have found a match | returning\n")
+			return 1;
 			}
 	if (bp == NULL)
 	{
-		//SAY1("DEBUG: loop: lp was null \n", lp);
+		SAY1("DEBUG: list_search: lp was null \n", lp);
 		return 0; /* not in the list */
 	}
 	//SAY1("DEBUG: loop: lpget is %p \n", NEXT_FREE(lp));
-		while(NEXT_FREE(lp) != 0){
-				//SAY1("DEBUG: list_search: looping, lp is %p \n", lp);
-				lp = (void *)GET(NEXT_FREE(lp));
-				if (bp == lp) { 	/* We have found a match */
-					return 1;
-				}
-			}
-		return 0;
+	while((bp = BP_TO_NEXT_FREE(bp)) != NULL)
+	{
+		SAY1("DEBUG: list_search: looping, lp is %p \n", lp);
+		lp = bp;
+		if (bp == lp) { 	/* We have found a match */
+			return 1;
+		}
+	}
+	return 0;
 	}
 
 static void printlist()
 {
 	void *bp = free_p;
 	SAY("DEBUG: ------------- Printing Free List -------------\n");
-    for (bp = free_p; bp != NULL; bp = GET(NEXT_FREE(bp))) {
+    for (bp = free_p; bp != NULL; bp = BP_TO_NEXT_FREE(bp)) {
+			//SAY1("DEBUG: printlist: in the loop and bp is [%p]\n", bp);
 			printblock(bp);
 		}
 	SAY("DEBUG: ------------- End Free List Print ------------\n");
@@ -644,8 +668,8 @@ static void printblock(void *bp)
     halloc = GET_ALLOC(HDRP(bp));  
     fsize = GET_SIZE(FTRP(bp));
     falloc = GET_ALLOC(FTRP(bp)); 
-	next = NEXT_FREE(bp);
-	prev = PREV_FREE(bp);
+	next = BP_TO_NEXT_FREE(bp);
+	prev = BP_TO_NEXT_FREE(bp);
 
     if (hsize == 0) {
 	printf("%p: EOL\n", bp);
@@ -661,8 +685,10 @@ static void printblock(void *bp)
 
 static void checkblock(void *bp) 
 {
+	SAY1("DEBUG: checkblock: entering checkblock(%p)\n", bp);
     if ((size_t)bp % 8)
 	printf("Error: %p is not doubleword aligned\n", bp);
     if (GET(HDRP(bp)) != GET(FTRP(bp)))
 	printf("Error: header does not match footer\n");
+	SAY1("DEBUG: checkblock: exiting checkblock(%p)\n", bp);
 }
