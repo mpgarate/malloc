@@ -464,6 +464,8 @@ static int list_add(void* bp)
 		
 		BP_TO_PREV_FREE(bp) = NULL; 
 		BP_TO_NEXT_FREE(bp) = NULL;
+		SAY3("DEBUG: list_add: %p %p %p\n", bp, BP_TO_PREV_FREE(bp), BP_TO_NEXT_FREE(bp));
+		return 1;
 	}
 	else
 	{
@@ -473,9 +475,12 @@ static int list_add(void* bp)
 		
 		BP_TO_PREV_FREE(bp) = NULL; 
 		BP_TO_NEXT_FREE(bp) = old_first;
+		BP_TO_PREV_FREE(old_first) = bp;
 		free_p = bp;
+		SAY3("DEBUG: list_add: %p %p %p\n", bp, BP_TO_PREV_FREE(bp), BP_TO_NEXT_FREE(bp));
+		return 1;
 	}
-	SAY3("DEBUG: list_add: %p %p %p\n", bp, BP_TO_PREV_FREE(bp), BP_TO_NEXT_FREE(bp));
+return 0;
 }
 /*
 static int list_greater_than_1() 
@@ -526,8 +531,6 @@ static int list_rm(void* bp)
 		BP_TO_PREV_FREE(bp_of_next) = NULL;
 		return 1;
 	}
-	
-	SAY("Made it here 3\n");
 	/* else if it's the last one in the list */
 	if (last_p == bp)
 	{
