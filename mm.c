@@ -157,16 +157,26 @@ int mm_init(void)
     heap_listp += (4*WSIZE);
 	
     PUT(heap_listp, 0);                          /* Alignment padding */
+	SAY1("DEBUG: mm_init: heap_listp is %p\n", heap_listp);
     PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1)); /* Prologue header */ 
+	SAY1("DEBUG: mm_init: heap_listp + 4 is %p\n", heap_listp + (1*WSIZE));
     PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1)); /* Prologue footer */ 
+	SAY1("DEBUG: mm_init: heap_listp + 8 is %p\n", heap_listp + (2*WSIZE));
     PUT(heap_listp + (3*WSIZE), PACK(0, 1));     /* Epilogue header */
+	SAY1("DEBUG: mm_init: heap_listp + 12 is %p\n", heap_listp + (3*WSIZE));
+	SAY1("DEBUG: mm_init: heap_listp + 20 is %p\n", heap_listp + (5*WSIZE));
     heap_listp += (2*WSIZE);
+	
 
 
 	SAY0("DEBUG: mm_init: calling extend_heap\n");
     /* Extend the empty heap with a free block of CHUNKSIZE bytes */
+	SAY("DEBUG: mm_init: check heap before extend\n");
     if (extend_heap(CHUNKSIZE/WSIZE) == NULL)
 		return -1;
+	PLIST()
+	SAY("DEBUG: mm_init: check heap after extend\n");
+	CHEAP()
 	SAY0("DEBUG: mm_init: returning\n");
     return 0;
 }
@@ -179,6 +189,7 @@ void *mm_malloc(size_t size)
 {
 	SAY1("DEBUG: mm_malloc: mm_malloc called for (%u)\n", size);
 	SAY0("DEBUG: mm_malloc: calling mm_check(0)\n")
+	PLIST()
 	CHEAP()
 	size_t asize;      /* Adjusted block size */
     size_t extendsize; /* Amount to extend heap if no fit */
@@ -273,7 +284,7 @@ static void *coalesce(void *bp)
 	
 	/* In each of these functions, check if the block-to-be-merged is in free list and remove it first */
     if (prev_alloc && next_alloc) {            /* Case 1 */
-	return bp;
+		return bp;
     }
 
     else if (prev_alloc && !next_alloc) {      /* Case 2 */
@@ -363,11 +374,14 @@ void mm_check(int verbose)
 	SAY1("DEBUG: mm_check: Heap (%p):\n", heap_listp);
 
     if ((GET_SIZE(HDRP(heap_listp)) != DSIZE) || !GET_ALLOC(HDRP(heap_listp)))
-	SAY0("DEBUG: mm_check: ERROR: Bad prologue header\n");
+	{
+		SAY0("DEBUG: mm_check: ERROR: Bad prologue header\n");
+		Assert(0==1);
+	}
     checkblock(heap_listp);
 	SAY0("DEBUG: mm_check: checking for blocks that have escaped coalescing\n");
     for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-		SAY1("DEBUG: mm_check: In the loop with bp:[%p]\n", bp);
+		//SAY1("DEBUG: mm_check: In the loop with bp:[%p]\n", bp);
 		if (verbose) 
 			printblock(bp);
 		checkblock(bp);
@@ -375,29 +389,42 @@ void mm_check(int verbose)
 		/* Check if two blocks next to each other are free */
 		if(!(GET_ALLOC(HDRP(bp))) && !(GET_ALLOC(HDRP(bp+GET_SIZE(HDRP(bp))))))
 			{
-				SAY0("DEBUG: mm_check: Double free block!\n");
+				SAY0("DEBUG: mm_check: Double free blocks:\n");
+				printblock(bp);
+				printblock(bp+GET_SIZE(HDRP(bp)));
+				Assert(0==1);
 			}
-		
-		if(GET_ALLOC(HDRP(bp)) == list_search(bp))
-		{
-			if (GET_ALLOC(HDRP(bp)))
-			{
-				SAY1("ERROR: mm_check: allocated block %p in list\n", bp);
-				SAY2("DEBUG: mm_check: GET_ALLOC is %i, list_search is %i\n", (GET_ALLOC(HDRP(bp))), list_search(bp));
-			}
-			else
-			{
-				SAY1("ERROR: mm_check: free block %p not in list\n", bp);
-				SAY2("DEBUG: mm_check: GET_ALLOC is %i, list_search is %i\n", (GET_ALLOC(HDRP(bp))), list_search(bp));
-			}
-		}
     }
-	SAY0("DEBUG: mm_check: out of the loop\n");
+	//SAY0("DEBUG: mm_check: out of the loop\n");
 
     if (verbose)
 	printblock(bp);
     if ((GET_SIZE(HDRP(bp)) != 0) || !(GET_ALLOC(HDRP(bp))))
 	SAY0("DEBUG: mm_check: ERROR: Bad epilogue header\n");
+	
+	void *fp = free_p;
+    for (fp = free_p; fp != NULL; fp = BP_TO_NEXT_FREE(fp)) {
+	
+		/* Check for free blocks not in the list and allocated blocks in the list */
+		if(GET_ALLOC(HDRP(fp)) == list_search(fp))
+		{
+			if (GET_ALLOC(HDRP(fp)) && list_search(fp))
+			{
+				SAY1("ERROR: mm_check: allocated block %p in list\n", fp);
+				SAY2("DEBUG: mm_check: allocated block in free list. GET_ALLOC is %i, list_search is %i\n", (GET_ALLOC(HDRP(fp))), list_search(fp));
+				printblock(fp);
+				Assert(!GET_ALLOC(HDRP(fp)));
+			}
+			else
+			{
+				SAY1("ERROR: mm_check: free block %p not in list\n", fp);
+				SAY2("DEBUG: mm_check: GET_ALLOC is %i, list_search is %i\n", (GET_ALLOC(HDRP(fp))), list_search(fp));
+				Assert(0==1);
+			}
+		}
+	
+	
+		}
 	
 }
 
@@ -423,13 +450,19 @@ static void *extend_heap(size_t words)
     /* Initialize free block header/footer and the epilogue header */
     PUT(HDRP(bp), PACK(size, 0));         /* Free block header */   
     PUT(FTRP(bp), PACK(size, 0));         /* Free block footer */   
-    PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1)); /* New epilogue header */ 
+    PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1)); /* New epilogue header */
 
 	SAY0("DEBUG: extend_heap: free block initialized; epilogue set\n");
 	SAY0("DEBUG: extend_heap: calling coalesce\n");
     /* Coalesce if the previous block was free */
 	heap_lastp = bp;
+	SAY1("DEBUG: extend_heap: calling list_add %p\n", bp);
 	list_add(bp); /* This prevents list_rm from breaking in this case */
+	SAY("DEBUG: extend_heap: calling PLIST()\n");
+	PLIST()
+	SAY("DEBUG: extend_heap: calling CHEAP()\n");
+	CHEAP()
+	SAY1("DEBUG: extend_heap: calling coalesce(%p)\n", bp);
     return coalesce(bp);
 }
 
@@ -453,9 +486,12 @@ static int list_add(void* bp)
 */
 static int list_add(void* bp)
 {
+	SAY2("DEBUG: list_add: adding %p, alloc: %i\n", bp, GET_ALLOC(HDRP(bp)));
+	Assert(!GET_ALLOC(HDRP(bp)));
 	/* If list is empty */
-	if (free_p == (void*)NULL)
+	if (free_p == NULL)
 	{
+		SAY0("DEBUG: list_add: nothing in list yet\n");
 		/* Create list */
 		free_p = bp;
 		free_lastp = bp; /* last free block */
@@ -464,31 +500,24 @@ static int list_add(void* bp)
 		
 		BP_TO_PREV_FREE(bp) = NULL; 
 		BP_TO_NEXT_FREE(bp) = NULL;
-		SAY3("DEBUG: list_add: %p %p %p\n", bp, BP_TO_PREV_FREE(bp), BP_TO_NEXT_FREE(bp));
+		SAY3("DEBUG: list_add: bp: %p BP_TO_PREV_FREE(bp):%p BP_TO_NEXT_FREE(bp): %p\n", bp, BP_TO_PREV_FREE(bp), BP_TO_NEXT_FREE(bp));
 		return 1;
 	}
 	else
 	{
 		/*list wasn't empty; inserting into the beginning of the list */
-		
+		SAY0("DEBUG: list_add: list wasn't empty, inserting at beginning\n");
 		void* old_first = free_p;
 		
 		BP_TO_PREV_FREE(bp) = NULL; 
 		BP_TO_NEXT_FREE(bp) = old_first;
 		BP_TO_PREV_FREE(old_first) = bp;
 		free_p = bp;
-		SAY3("DEBUG: list_add: %p %p %p\n", bp, BP_TO_PREV_FREE(bp), BP_TO_NEXT_FREE(bp));
+		SAY3("DEBUG: list_add: bp: %p BP_TO_PREV_FREE(bp):%p BP_TO_NEXT_FREE(bp): %p\n", bp, BP_TO_PREV_FREE(bp), BP_TO_NEXT_FREE(bp));
 		return 1;
 	}
 return 0;
 }
-/*
-static int list_greater_than_1() 
-{
-	char *bp;
-	
-}
-*/
 
 
 /* Delete a block from the free list
@@ -497,6 +526,7 @@ static int list_greater_than_1()
 
 static int list_rm(void* bp)
 {	/* If list is empty */
+	SAY1("DEBUG: list_rm: removing %p", bp);
 	if (free_p == NULL)
 	{
 		SAY1("DEBUG: list_rm: free_p was null, returning fail %p\n", free_p);
@@ -611,8 +641,11 @@ static void *find_fit(size_t asize)
 	/* TODO: make this search work! */
 	
 	/*CASE: list is empty, so no fit, DUH */
-	if(free_p == NULL) return 0;
-	
+	if(free_p == NULL) 
+	{
+		SAY("DEBUG: find_fit: List is empty, returning\n");
+		return 0;
+	}	
 	
 	/* begin search at the beginning of the list */
     void *bp = BP_TO_NEXT_FREE(free_p);
@@ -622,8 +655,10 @@ static void *find_fit(size_t asize)
 	
 	while(bp != NULL)
 	{
+		SAY("DEBUG: find_fit: List is not empty\n");
 		if (asize == GET_SIZE(HDRP(bp)))
 		{
+			SAY("DEBUG: find_fit: equal sizes, this is the best fit\n");
 			return bp;		/* If they are equal, this fit is the best */
 		}
 		else if(asize < GET_SIZE(HDRP(bp) && GET_SIZE(HDRP(bp)) < best_size))
@@ -633,13 +668,15 @@ static void *find_fit(size_t asize)
 		}
 		bp = (void *)BP_TO_NEXT_FREE(bp);
 	}
+	
+	SAY2("DEBUG: find_fit: after loop, %p is best, size is: %i\n", best, best_size);
 	return best;
 }
 
 
 static int list_search(void* bp)
 {
-	SAY0("DEBUG: list_search: entering\n");
+	//SAY0("DEBUG: list_search: entering\n");
 	
 	/* Check if list is uninitialized */
 	if (free_p == NULL) return 0; /* Not in the list */
@@ -647,20 +684,21 @@ static int list_search(void* bp)
 	
 	void * lp = free_p;
 	
-	//SAY1("DEBUG: list_search: lp is %p \n", lp);
+	//SAY2("DEBUG: list_search: lp is %p, bp is %p \n", lp, bp);
 	
-	
-	if (bp == lp) { 		/* We have found a match */
-			//SAY0("DEBUG: list_search: we have found a match | returning\n")
-			return 1;
-			}
 	if (bp == NULL)
 	{
 		//SAY1("DEBUG: list_search: lp was null %p \n", lp);
 		return 0; /* not in the list */
 	}
+	
+	if (bp == lp) { 		/* We have found a match */
+		//SAY0("DEBUG: list_search: we have found a match | returning\n")
+		return 1;
+	}
+	
 	//SAY1("DEBUG: loop: lpget is %p \n", NEXT_FREE(lp));
-	while(bp != NULL)
+	while(BP_TO_NEXT_FREE(bp) != NULL)
 	{
 		bp = BP_TO_NEXT_FREE(bp);
 		//SAY1("DEBUG: list_search: looping, lp is %p \n", lp);
@@ -693,7 +731,7 @@ static void printblock(void *bp)
     fsize = GET_SIZE(FTRP(bp));
     falloc = GET_ALLOC(FTRP(bp)); 
 	next = BP_TO_NEXT_FREE(bp);
-	prev = BP_TO_NEXT_FREE(bp);
+	prev = BP_TO_PREV_FREE(bp);
 
     if (hsize == 0) {
 	printf("%p: EOL\n", bp);
@@ -709,10 +747,16 @@ static void printblock(void *bp)
 
 static void checkblock(void *bp) 
 {
-	SAY1("DEBUG: checkblock: entering checkblock(%p)\n", bp);
+	//SAY1("DEBUG: checkblock: entering checkblock(%p)\n", bp);
     if ((size_t)bp % 8)
-	printf("Error: %p is not doubleword aligned\n", bp);
-    if (GET(HDRP(bp)) != GET(FTRP(bp)))
-	printf("Error: header does not match footer\n");
-	SAY1("DEBUG: checkblock: exiting checkblock(%p)\n", bp);
+	{
+		printf("Error: %p is not doubleword aligned\n", bp);
+		Assert(0==1);
+	}
+	if (GET(HDRP(bp)) != GET(FTRP(bp)))
+	{
+		printf("Error: header does not match footer\n");
+		Assert(0==1);
+	}
+	//SAY1("DEBUG: checkblock: exiting checkblock(%p)\n", bp);
 }
