@@ -166,8 +166,6 @@ int mm_init(void)
 	SAY1("DEBUG: mm_init: heap_listp + 20 is %p\n", heap_listp + (5*WSIZE));
     heap_listp += (2*WSIZE);
 	
-
-
 	SAY0("DEBUG: mm_init: calling extend_heap\n");
     /* Extend the empty heap with a free block of CHUNKSIZE bytes */
 	SAY("DEBUG: mm_init: check heap before extend\n");
@@ -223,9 +221,28 @@ void *mm_malloc(size_t size)
 
     /* No fit found. Get more memory and place the block */
     
-
+	/* See if we can reduce sbrk call size to merge with existing free block */
 	
-	extendsize = MAX(asize,CHUNKSIZE);
+	SAY2("DEBUG: mm_malloc: heap_lastp: [%p] free_lastp: [%p]\n", heap_lastp, free_lastp);
+	if(heap_lastp != NULL && heap_lastp == free_lastp)
+	{
+		SAY("DEBUG: mm_malloc: They are !NULL and equal each other\n");
+		void* lastblock = heap_lastp;
+		if(asize - (GET_SIZE(HDRP(lastblock))) > 0)
+		{
+			SAY1("DEBUG: mm_malloc: entered the if, GET_SIZE: %u\n", GET_SIZE(HDRP(lastblock)));
+			extendsize = (size_t)GET_SIZE(HDRP(lastblock));
+			SAY1("DEBUG: mm_malloc: extendsize: %u\n", extendsize);
+			extendsize = asize - extendsize;
+			SAY2("DEBUG: mm_malloc: size was %u and is now %u\n", asize, extendsize);
+		}
+	}
+	else
+	{
+		extendsize = asize;
+	}
+	
+	extendsize = MAX(extendsize,CHUNKSIZE);
     if ((bp = extend_heap(extendsize/WSIZE)) == NULL)  
 		return NULL;
 	SAY2("DEBUG: mm_malloc calling place(%p, %i)\n", bp, asize);
@@ -615,8 +632,6 @@ static int list_rm(void* bp)
 static void place(void *bp, size_t asize)
 
 {
-	
-	
     size_t csize = GET_SIZE(HDRP(bp));
 	SAY1("DEBUG: placing %p\n", bp);
 	
@@ -631,7 +646,7 @@ static void place(void *bp, size_t asize)
 	
 	/* Add this block slice to the free list */
 	/* Update heap_lastp to point to last block after extend_heap call */
-	if (bp > heap_lastp)
+	if (bp > (void *)heap_lastp)
 		{
 			heap_lastp = bp;
 			SAY1("DEBUG: place: calling coalesce on %p\n", bp);
