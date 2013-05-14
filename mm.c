@@ -234,6 +234,12 @@ void mm_free(void *bp)
 		mm_init();
     }
 
+	/* CASE: mm_free is passed a value that is outside the heap */
+	if ((void*)heap_lastp < bp || (void*)heap_listp > bp) {
+		/* You can't free it then! */
+		return;
+	}
+	
     PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
 	
@@ -594,12 +600,18 @@ static void place(void *bp, size_t asize)
  
  /* TODO: make this get fit from free list */
 static void *find_fit(size_t asize)
-
 {
  /* Best fit search */
  
 	/* TODO: make this search work! */
-    void *bp;
+	
+	/*CASE: list is empty, so no fit, DUH */
+	if(free_p == NULL) return 0;
+	
+	
+	/* begin search at the beginning of the list */
+    void *bp = BP_TO_NEXT_FREE(free_p);
+	
 	void *best = NULL; /* return NULL if none found */
 	size_t best_size;	/* Gets the max size of size_t */
 	
@@ -623,6 +635,11 @@ static void *find_fit(size_t asize)
 static int list_search(void* bp)
 {
 	SAY0("DEBUG: list_search: entering\n");
+	
+	/* Check if list is uninitialized */
+	if (free_p == NULL) return 0; /* Not in the list */
+	
+	
 	void * lp = free_p;
 	
 	//SAY1("DEBUG: list_search: lp is %p \n", lp);
