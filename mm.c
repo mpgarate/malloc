@@ -279,7 +279,7 @@ static void *coalesce(void *bp)
     else if (prev_alloc && !next_alloc) {      /* Case 2 */
 	
 	/* Remove the block to be merged from the list. It's ok if it isn't there. */
-	//list_rm(NEXT_BLKP(bp));
+	list_rm(NEXT_BLKP(bp));
 	size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
 	PUT(HDRP(bp), PACK(size, 0));
 	PUT(FTRP(bp), PACK(size,0));
@@ -429,7 +429,7 @@ static void *extend_heap(size_t words)
 	SAY0("DEBUG: extend_heap: calling coalesce\n");
     /* Coalesce if the previous block was free */
 	heap_lastp = bp;
-	//list_add(bp);
+	list_add(bp); /* This prevents list_rm from breaking in this case */
     return coalesce(bp);
 }
 
@@ -451,7 +451,7 @@ static void *extend_heap(size_t words)
 	static void* free_lastp;	 Point to last free list item
 static int list_add(void* bp)
 */
-static void list_add(void* bp)
+static int list_add(void* bp)
 {
 	/* If list is empty */
 	if (free_p == (void*)NULL)
@@ -475,6 +475,7 @@ static void list_add(void* bp)
 		BP_TO_NEXT_FREE(bp) = old_first;
 		free_p = bp;
 	}
+	SAY3("DEBUG: list_add: %p %p %p\n", bp, BP_TO_PREV_FREE(bp), BP_TO_NEXT_FREE(bp));
 }
 /*
 static int list_greater_than_1() 
@@ -495,15 +496,17 @@ static int list_rm(void* bp)
 	{
 		SAY1("DEBUG: list_rm: free_p was null, returning fail %p\n", free_p);
 		return 0;
-	}	
+	}
+	
+	SAY("Made it here 0\n");
 	if(GET_ALLOC(HDRP(bp))) {
 		SAY1("DEBUG: list_rm: Someone's trying to remove an allocated block from the free list %p\n", bp);
 		return 1; 
-	} 
+	}
 	
-	if (free_p == NULL && last_p == NULL) 
+	if (free_p == NULL && last_p == NULL)
 	{ /* thge list is empty*/
-		SAY1("DEBUG: list_rm: the list is empty");
+		SAY0("DEBUG: list_rm: the list is empty");
 		return 1;
 	}
 	
@@ -511,33 +514,39 @@ static int list_rm(void* bp)
 	{ /* it's the only one in the list */
 		free_p = NULL;
 		last_p = NULL;
-		return;
+		return 1;
 	}
 	
 	/* else if it's first one in list	*/
 	if (free_p == bp)
 	{
 		void* bp_of_next = BP_TO_NEXT_FREE(bp);
+		SAY2("DEBUG: list_rm: %p comes out to %p\n", bp, PREV_FREE(bp_of_next));
 		free_p = bp_of_next;
 		BP_TO_PREV_FREE(bp_of_next) = NULL;
-		return;
+		return 1;
 	}
 	
+	SAY("Made it here 3\n");
 	/* else if it's the last one in the list */
 	if (last_p == bp)
 	{
 		void* bp_of_prev = BP_TO_PREV_FREE(bp);
 		last_p = bp_of_prev;
-		BP_TO_NEXT_FREE(bo_of_prev);
-		return;
+		BP_TO_NEXT_FREE(bp_of_prev) = NULL;
+		return 1;
 	}
 	/* else it's in the middle */
  	
 	void* bp_of_prev = BP_TO_PREV_FREE(bp);
 	void* bp_of_next = BP_TO_NEXT_FREE(bp);
+	SAY3("DEBUG: list_rm: %p %p %p\n", bp, bp_of_prev, bp_of_next);
 	BP_TO_PREV_FREE(bp_of_next) = BP_TO_PREV_FREE(bp);
-	PB_TO_NEXT_FREE(bp_of_prev) = BP_TO_NEXT_FREE(bp);
+	SAY("DEBUG: list_rm: Made it here 7\n");
+	BP_TO_NEXT_FREE(bp_of_prev) = BP_TO_NEXT_FREE(bp);
+	SAY("DEBUG: list_rm: Made it here 8\n");
 	
+
 	return 0;
 }
 /* 
@@ -552,7 +561,6 @@ static void place(void *bp, size_t asize)
 
 	SAY1("DEBUG: placing %p\n", bp);
 	
-	if (list_rm(bp)) SAY1("DEBUG: place: removed %p\n", bp);
     if ((csize - asize) >= (2*DSIZE)) {
 	PUT(HDRP(bp), PACK(asize, 1));
 	PUT(FTRP(bp), PACK(asize, 1));
