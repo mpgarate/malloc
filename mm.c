@@ -527,7 +527,7 @@ static int list_rm(void* bp)
 	//SAY0("DEBUG: list_rm initialize pointers\n");
 	//void* next = BP_TO_NEXT_FREE(bp);
 	//void* prev = BP_TO_NEXT_FREE(bp);
-	SAY0("DEBUG: list_rm set prev.next\n");
+	SAY0("DEBUG: list_rm: set prev.next\n");
 	PUT(PREV_FREE(BP_TO_NEXT_FREE(bp)), BP_TO_PREV_FREE(bp));
 	SAY0("DEBUG: list_rm: set next.prev\n");
 	PUT(NEXT_FREE(BP_TO_PREV_FREE(bp)), BP_TO_NEXT_FREE(bp));
