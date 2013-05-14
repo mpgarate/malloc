@@ -105,6 +105,7 @@ void doAssert(int c)
 
 /* Global variables */
 static char *heap_listp = 0;  /* Pointer to first block */
+static char *last_p; /* pointer to last free block */
 
 /* Function prototypes for internal helper routines */
 static void *extend_heap(size_t words);
@@ -450,7 +451,7 @@ static void *extend_heap(size_t words)
 	static void* free_lastp;	 Point to last free list item
 static int list_add(void* bp)
 */
-static int list_add(void* bp)
+static void list_add(void* bp)
 {
 	/* If list is empty */
 	if (free_p == (void*)NULL)
@@ -463,8 +464,6 @@ static int list_add(void* bp)
 		
 		BP_TO_PREV_FREE(bp) = NULL; 
 		BP_TO_NEXT_FREE(bp) = NULL;
-
-		return 1;
 	}
 	else
 	{
@@ -475,10 +474,7 @@ static int list_add(void* bp)
 		BP_TO_PREV_FREE(bp) = NULL; 
 		BP_TO_NEXT_FREE(bp) = old_first;
 		free_p = bp;
-		
-		return 1;
 	}
-	return 0;
 }
 /*
 static int list_greater_than_1() 
@@ -495,42 +491,57 @@ static int list_greater_than_1()
 
 static int list_rm(void* bp)
 {	/* If list is empty */
-	SAY1("DEBUG: list_rm removing %p\n", bp);
-	//PLIST()
 	if (free_p == NULL)
 	{
-		SAY1("DEBUG: free_p was null, returning fail %p\n", free_p);
+		SAY1("DEBUG: list_rm: free_p was null, returning fail %p\n", free_p);
 		return 0;
-	}
-	/* Insert at beginning of list */
-
-	/* determine somehow if something is in the list */
-	/* Let's try to assume that allocated and free bit is set properly */
+	}	
+	if(GET_ALLOC(HDRP(bp))) {
+		SAY1("DEBUG: list_rm: Someone's trying to remove an allocated block from the free list %p\n", bp);
+		return 1; 
+	} 
 	
-	if(GET_ALLOC(HDRP(bp))) return 1; /* Success! No need to remove from list */
-	
-	if(BP_TO_NEXT_FREE(bp) == NULL) /*TEST IF LIST IS EMPTY*/
-	{
-		SAY("DEBUG: list_rm: bp was only one in list. Removing. \n");
-		free_p = NULL;
-		SAY1("DEBUG: list_rm: free_p should be nil: %p\n", free_p);
-		PLIST()
+	if (free_p == NULL && last_p == NULL) 
+	{ /* thge list is empty*/
+		SAY1("DEBUG: list_rm: the list is empty");
 		return 1;
 	}
-	printblock(bp);
-	//SAY0("DEBUG: list_rm initialize pointers\n");
-	//void* next = BP_TO_NEXT_FREE(bp);
-	//void* prev = BP_TO_NEXT_FREE(bp);
-	SAY0("DEBUG: list_rm: set prev.next\n");
-	PUT(PREV_FREE(BP_TO_NEXT_FREE(bp)), BP_TO_PREV_FREE(bp));
-	SAY0("DEBUG: list_rm: set next.prev\n");
-	PUT(NEXT_FREE(BP_TO_PREV_FREE(bp)), BP_TO_NEXT_FREE(bp));
 	
-	SAY0("DEBUG: list_rm set curr to NULL\n");
-	/*Next: try replacing PUT with BP_TO macros*/
-	PUT(PREV_FREE(bp), NULL);
-	PUT(NEXT_FREE(bp), NULL);
-	PLIST()
+	if (free_p == bp && last_p == bp) 
+	{ /* it's the one in the list */
+		free_p = NULL;
+		last_p = NULL;
+		return;
+	}
+	
+	if (BP_TO_PREV_FREE(bp) != NULL)
+	{ /* it's not the first one in the list */
+		void* bp_of_prev = BP_TO_PREV_FREE(bp);
+		PB_TO_NEXT_FREE(bp_prev) = BP_TO_NEXT_FREE(bp);
+	}
+	else if (BP_TO_NEXT_FREE(bp) != NULL ) /* it's not the last one in the list */
+		void* bp_of_next = BP_TO_NEXT_FREE(bp);
+		BP_TO_PREV_FREE(bp_of_next) = BP_TO_PREV_FREE(bp);
+	}
+
+	//if (BP_TO_NEXT_FREE(bp) != NULL) 
+	//{ 
+	//	void* bp_of_next = BP_TO_NEXT_FREE(bp);
+	//	BP_TO_NEXT_FREE(bp) = NULL;
+	//}
+	
+	/* if it's the last one in list */
+	else if (last_p == bp)
+	{
+		void* prev_of_bp = BP_TO_PREV_FREE(bp);
+		last_p = BP_TO_PREV_FREE(bp);
+		BP_TO_NEXT_FREE(next_of_bp) = NULL;
+	} 
+	else
+	{
+	
+	}
+	
 	return 1;
 }
 /* 
