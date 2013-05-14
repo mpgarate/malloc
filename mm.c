@@ -105,7 +105,7 @@ void doAssert(int c)
 
 /* Global variables */
 static char *heap_listp = 0;  /* Pointer to first block */
-static char *last_p; /* pointer to last free block */
+static char *heap_lastp = 0; /* pointer to last free block */
 
 /* Function prototypes for internal helper routines */
 static void *extend_heap(size_t words);
@@ -135,8 +135,7 @@ static int list_search(void* bp);
 /* Our global variables */
 
 
-/* TODO: update this value in extend_heap AND place AND anywhere else? */ 
-static void* heap_lastp;	/* Point to last item in heap */
+/* TODO: update this value in extend_heap AND place AND anywhere else? */
 static void* free_p;		/* Point to first free list item */
 static void* free_lastp;	/* Point to last free list item*/
 
@@ -196,6 +195,7 @@ void *mm_malloc(size_t size)
     char *bp;
 
     if (heap_listp == 0){
+		SAY("ERROR: mm_free: heap_listp is zero, calling mm_init again");
 		mm_init();
     }
     /* Ignore spurious requests */
@@ -214,7 +214,10 @@ void *mm_malloc(size_t size)
 		SAY2("DEBUG: mm_malloc calling place(%p, %i)\n", bp, asize);
 		list_rm(bp);
 		place(bp, asize);
-		SAY1("DEBUG: mm_malloc returning %p\n", bp);
+		SAY2("DEBUG: mm_malloc returning %p, size: %i\n", bp, GET_SIZE(HDRP(bp)));
+		SAY("DEBUG: mm_malloc printing list before return:\n");
+		PLIST()
+		CHEAP()
 		return bp;
     }
 
@@ -237,12 +240,15 @@ void *mm_malloc(size_t size)
  */
 void mm_free(void *bp)
 {
+	SAY1("DEBUG: mm_free: called on [%p]\n", bp);
+	SAY("DEBUG: mm_free: checking heap:\n");
 	CHEAP()
     if(bp == 0) 
 	return;
 
     size_t size = GET_SIZE(HDRP(bp));
     if (heap_listp == 0){
+		SAY("ERROR: mm_free: heap_listp is zero, calling mm_init again\n");
 		mm_init();
     }
 
@@ -257,6 +263,8 @@ void mm_free(void *bp)
 	
 	/* TODO: addToList is called from within coalesce */
     coalesce(bp);
+	SAY("DEBUG: mm_free: removed block [%bp]\n");
+	PLIST()
 	CHEAP()
 }
 
@@ -284,6 +292,8 @@ static void *coalesce(void *bp)
 	
 	/* In each of these functions, check if the block-to-be-merged is in free list and remove it first */
     if (prev_alloc && next_alloc) {            /* Case 1 */
+		SAY1("DEBUG: coalesce: [%p] does not need to be merged. Adding to list and returning\n", bp);
+		list_add(bp);
 		return bp;
     }
 
@@ -366,7 +376,7 @@ void *mm_realloc(void *ptr, size_t size)
 /* 
  * check - Based from book code
  */
-void mm_check(int verbose)  
+void mm_check(int verbose)
 { 
     char *bp = heap_listp;
 
@@ -379,7 +389,7 @@ void mm_check(int verbose)
 		Assert(0==1);
 	}
     checkblock(heap_listp);
-	SAY0("DEBUG: mm_check: checking for blocks that have escaped coalescing\n");
+	//SAY0("DEBUG: mm_check: checking for blocks that have escaped coalescing\n");
     for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
 		//SAY1("DEBUG: mm_check: In the loop with bp:[%p]\n", bp);
 		if (verbose) 
@@ -457,13 +467,16 @@ static void *extend_heap(size_t words)
     /* Coalesce if the previous block was free */
 	heap_lastp = bp;
 	SAY1("DEBUG: extend_heap: calling list_add %p\n", bp);
-	list_add(bp); /* This prevents list_rm from breaking in this case */
+	//list_add(bp); /* This prevents list_rm from breaking in this case */
+	SAY1("DEBUG: extend_heap: calling coalesce(%p)\n", bp);
+	bp = coalesce(bp);
+	
 	SAY("DEBUG: extend_heap: calling PLIST()\n");
 	PLIST()
 	SAY("DEBUG: extend_heap: calling CHEAP()\n");
 	CHEAP()
-	SAY1("DEBUG: extend_heap: calling coalesce(%p)\n", bp);
-    return coalesce(bp);
+	
+	return bp;
 }
 
 
@@ -486,8 +499,11 @@ static int list_add(void* bp)
 */
 static int list_add(void* bp)
 {
+	SAY("DEBUG: list_add: State of list before list_add:\n");
+	PLIST()
 	SAY2("DEBUG: list_add: adding %p, alloc: %i\n", bp, GET_ALLOC(HDRP(bp)));
 	Assert(!GET_ALLOC(HDRP(bp)));
+	
 	/* If list is empty */
 	if (free_p == NULL)
 	{
@@ -501,19 +517,23 @@ static int list_add(void* bp)
 		BP_TO_PREV_FREE(bp) = NULL; 
 		BP_TO_NEXT_FREE(bp) = NULL;
 		SAY3("DEBUG: list_add: bp: %p BP_TO_PREV_FREE(bp):%p BP_TO_NEXT_FREE(bp): %p\n", bp, BP_TO_PREV_FREE(bp), BP_TO_NEXT_FREE(bp));
+		SAY("DEBUG: list_add: State of list after list_add:\n");
+		PLIST()
 		return 1;
 	}
-	else
+	else //if (free_p == bp)
 	{
 		/*list wasn't empty; inserting into the beginning of the list */
 		SAY0("DEBUG: list_add: list wasn't empty, inserting at beginning\n");
+		SAY2("DEBUG: list_add: free_p: [%p], bp: [%p] \n", free_p, bp);
 		void* old_first = free_p;
-		
-		BP_TO_PREV_FREE(bp) = NULL; 
+		BP_TO_PREV_FREE(bp) = NULL;
 		BP_TO_NEXT_FREE(bp) = old_first;
 		BP_TO_PREV_FREE(old_first) = bp;
 		free_p = bp;
 		SAY3("DEBUG: list_add: bp: %p BP_TO_PREV_FREE(bp):%p BP_TO_NEXT_FREE(bp): %p\n", bp, BP_TO_PREV_FREE(bp), BP_TO_NEXT_FREE(bp));
+		SAY("DEBUG: list_add: State of list after list_add:\n");
+		PLIST()
 		return 1;
 	}
 return 0;
@@ -526,32 +546,31 @@ return 0;
 
 static int list_rm(void* bp)
 {	/* If list is empty */
-	SAY1("DEBUG: list_rm: removing %p", bp);
+	SAY1("DEBUG: list_rm: removing %p\n", bp);
 	if (free_p == NULL)
 	{
 		SAY1("DEBUG: list_rm: free_p was null, returning fail %p\n", free_p);
 		return 0;
 	}
 	
-	SAY("Made it here 0\n");
 	if(GET_ALLOC(HDRP(bp))) {
 		SAY1("DEBUG: list_rm: Someone's trying to remove an allocated block from the free list %p\n", bp);
 		return 1; 
 	}
 	
-	if (free_p == NULL && last_p == NULL)
+	if (free_p == NULL && free_lastp == NULL)
 	{ /* thge list is empty*/
-		SAY0("DEBUG: list_rm: the list is empty");
+		SAY0("DEBUG: list_rm: the list is empty\n");
 		return 1;
 	}
-	
-	if (free_p == bp && last_p == bp) 
+	SAY3("DEBUG: list_rm: free_p: [%p] bp: [%p] free_lastp: [%p]\n", free_p, bp, free_lastp);
+	if (free_p == bp && free_lastp == bp) 
 	{ /* it's the only one in the list */
 		free_p = NULL;
-		last_p = NULL;
+		free_lastp = NULL;
 		return 1;
 	}
-	
+	SAY("DEBUG: list_rm: not the only one in the list\n");
 	/* else if it's first one in list	*/
 	if (free_p == bp)
 	{
@@ -562,10 +581,10 @@ static int list_rm(void* bp)
 		return 1;
 	}
 	/* else if it's the last one in the list */
-	if (last_p == bp)
+	if (free_lastp == bp)
 	{
 		void* bp_of_prev = BP_TO_PREV_FREE(bp);
-		last_p = bp_of_prev;
+		free_lastp = bp_of_prev;
 		BP_TO_NEXT_FREE(bp_of_prev) = NULL;
 		return 1;
 	}
@@ -597,15 +616,21 @@ static void place(void *bp, size_t asize)
     if ((csize - asize) >= (2*DSIZE)) {
 	PUT(HDRP(bp), PACK(asize, 1));
 	PUT(FTRP(bp), PACK(asize, 1));
+	SAY2("DEBUG: place just made block [%p], size: %i\n", bp, GET_SIZE(HDRP(bp)));
 	bp = NEXT_BLKP(bp);
 	PUT(HDRP(bp), PACK(csize-asize, 0));
 	PUT(FTRP(bp), PACK(csize-asize, 0));
+	SAY2("DEBUG: place just split off block [%p], size: %i\n", bp, GET_SIZE(HDRP(bp)));
 	
 	/* Add this block slice to the free list */
-	SAY1("DEBUG: place: calling coalesce on %p\n", bp);
-	if (bp > heap_lastp) heap_lastp = bp;
-	coalesce(bp);
-    }
+	/* Update heap_lastp to point to last block after extend_heap call */
+	if (bp > heap_lastp)
+		{
+			heap_lastp = bp;
+			SAY1("DEBUG: place: calling coalesce on %p\n", bp);
+			coalesce(bp);
+		}
+	}
     else { 
 	PUT(HDRP(bp), PACK(csize, 1));
 	PUT(FTRP(bp), PACK(csize, 1));
@@ -637,8 +662,6 @@ static void place(void *bp, size_t asize)
 static void *find_fit(size_t asize)
 {
  /* Best fit search */
- 
-	/* TODO: make this search work! */
 	
 	/*CASE: list is empty, so no fit, DUH */
 	if(free_p == NULL) 
@@ -648,25 +671,28 @@ static void *find_fit(size_t asize)
 	}	
 	
 	/* begin search at the beginning of the list */
-    void *bp = BP_TO_NEXT_FREE(free_p);
+    void *bp = free_p;
 	
 	void *best = NULL; /* return NULL if none found */
-	size_t best_size;	/* Gets the max size of size_t */
-	
+	size_t best_size = (size_t)-1;	/* Gets the max size of size_t */
+	size_t curr_size;	/* Gets the max size of size_t */
+	SAY1("DEBUG: find_fit: bp is %p\n", bp);
 	while(bp != NULL)
 	{
+		curr_size = GET_SIZE(HDRP(bp));
+		
 		SAY("DEBUG: find_fit: List is not empty\n");
-		if (asize == GET_SIZE(HDRP(bp)))
+		if (asize == curr_size)
 		{
 			SAY("DEBUG: find_fit: equal sizes, this is the best fit\n");
 			return bp;		/* If they are equal, this fit is the best */
 		}
-		else if(asize < GET_SIZE(HDRP(bp) && GET_SIZE(HDRP(bp)) < best_size))
+		else if(asize < curr_size && curr_size < best_size)
 		{
-			best_size = GET_SIZE(HDRP(bp));
+			best_size = curr_size;
 			best = bp;
 		}
-		bp = (void *)BP_TO_NEXT_FREE(bp);
+		bp = BP_TO_NEXT_FREE(bp);
 	}
 	
 	SAY2("DEBUG: find_fit: after loop, %p is best, size is: %i\n", best, best_size);
@@ -714,6 +740,7 @@ static void printlist()
 {
 	void *bp = free_p;
 	SAY("DEBUG: ------------- Printing Free List -------------\n");
+	SAY2("free_p: [%p] free_lastp: [%p]\n", free_p, free_lastp);
     for (bp = free_p; bp != NULL; bp = BP_TO_NEXT_FREE(bp)) {
 			//SAY1("DEBUG: printlist: in the loop and bp is [%p]\n", bp);
 			printblock(bp);
