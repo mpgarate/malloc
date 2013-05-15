@@ -75,8 +75,13 @@ team_t team = {
 #define BP_TO_NEXT_FREE(bp) (((void**)bp)[0])
 #define BP_TO_PREV_FREE(bp) (((void**)bp)[1])
 
+/* TREE MACROS */
+#define BP_TO_LEFT(bp)		BP_TO_NEXT_FREE(bp)
+#define BP_TO_RIGHT(bp)		BP_TO_PREV_FREE(bp)
+#define	BP_TO_PARENT(bp)	(((void**)bp)[2])
+
 /* DEBUG: 1 if true, 0 if false. Will say more things if true.*/
-#define DEBUG	0
+#define DEBUG	1
 /* Call heapchecker */
 #define	CHEAP() {if(DEBUG)mm_check(0);fflush(stdout);}
 #define	PLIST() {if(DEBUG)printlist();;fflush(stdout);}
@@ -112,7 +117,7 @@ void doAssert(int c)
 /* Global variables */
 static char *heap_listp = 0;  /* Pointer to first block */
 static char *heap_lastp = 0; /* pointer to last free block */
-static void* free_p;		/* Point to first free list item */
+static void* tree_p;		/* Point to first free list item */
 static void* free_lastp;	/* Point to last free list item*/
 
 /* Function prototypes for internal helper routines */
@@ -147,7 +152,7 @@ int mm_init(void)
 		return -1;
 		
 	heap_lastp = heap_listp;
-	free_p = NULL;
+	tree_p = NULL;
 	free_lastp = NULL;
 	// one block here is unused
     heap_listp += (4*WSIZE);
@@ -240,7 +245,7 @@ void *mm_malloc(size_t size)
 	}
 	
 	extendsize = MAX(extendsize,CHUNKSIZE);
-    if ((bp = extend_heap(extendsize/WSIZE)) == NULL)  
+    if ((bp = extend_heap(extendsize/WSIZE)) == NULL)
 		return NULL;
 	SAY2("DEBUG: mm_malloc calling place(%p, %i)\n", bp, asize);
 	list_rm(bp);
@@ -436,8 +441,8 @@ void mm_check(int verbose)
     if ((GET_SIZE(HDRP(bp)) != 0) || !(GET_ALLOC(HDRP(bp))))
 	SAY0("DEBUG: mm_check: ERROR: Bad epilogue header\n");
 	
-	void *fp = free_p;
-    for (fp = free_p; fp != NULL; fp = BP_TO_NEXT_FREE(fp)) {
+	void *fp = tree_p;
+    for (fp = tree_p; fp != NULL; fp = BP_TO_NEXT_FREE(fp)) {
 	
 		/* Check for free blocks not in the list and allocated blocks in the list */
 		if(GET_ALLOC(HDRP(fp)) == list_search(fp))
@@ -506,7 +511,7 @@ static void *extend_heap(size_t words)
 /* Add to list, return 1 if success and 0 if fail
 	
 	Updates block pointers and the following globals:
-	static void* free_p;		 Point to first free list item 
+	static void* tree_p;		 Point to first free list item 
 	static void* free_lastp;	 Point to last free list item
 
  */
@@ -518,11 +523,11 @@ static int list_add(void* bp)
 	Assert(!GET_ALLOC(HDRP(bp)));
 	
 	/* If list is empty */
-	if (free_p == NULL)
+	if (tree_p == NULL)
 	{
 		SAY0("DEBUG: list_add: nothing in list yet\n");
 		/* Create list */
-		free_p = bp;
+		tree_p = bp;
 		free_lastp = bp; /* last free block */
 		
 		/* If the list is empty, the block's next and previous pointers should be NULL */
@@ -539,8 +544,8 @@ static int list_add(void* bp)
 		/* list wasn't empty; inserting into the list, sorted from size low -> high */
 		
 		SAY0("DEBUG: list_add: list wasn't empty, inserting at beginning\n");
-		SAY2("DEBUG: list_add: free_p: [%p], bp: [%p] \n", free_p, bp);
-		void* lp = free_p; /* hold last pointer, loop pointer */
+		SAY2("DEBUG: list_add: tree_p: [%p], bp: [%p] \n", tree_p, bp);
+		void* lp = tree_p; /* hold last pointer, loop pointer */
 		
 		while(GET_SIZE(HDRP(bp)) > GET_SIZE(HDRP(lp)) && BP_TO_NEXT_FREE(lp) != NULL)
 		{
@@ -549,7 +554,7 @@ static int list_add(void* bp)
 		
 		
 		/* if between two blocks */
-		if (lp != free_p && lp != free_lastp)
+		if (lp != tree_p && lp != free_lastp)
 		{	
 			SAY("DEBUG: list_add: add between two blocks\n");
 			void* new_prev = BP_TO_PREV_FREE(lp);
@@ -568,13 +573,13 @@ static int list_add(void* bp)
 			free_lastp = bp;
 		}
 		/* if at beginning of list */
-		else if(lp == free_p)
+		else if(lp == tree_p)
 		{
 			SAY("DEBUG: list_add: add to list beginning\n");
 			BP_TO_PREV_FREE(bp) = NULL;
 			BP_TO_NEXT_FREE(bp) = lp;
 			BP_TO_PREV_FREE(lp) = bp;
-			free_p = bp;
+			tree_p = bp;
 		}
 		
 		SAY3("DEBUG: list_add: bp: %p BP_TO_PREV_FREE(bp):%p BP_TO_NEXT_FREE(bp): %p\n", bp, BP_TO_PREV_FREE(bp), BP_TO_NEXT_FREE(bp));
@@ -596,9 +601,9 @@ return 0;
 static int list_rm(void* bp)
 {	/* If list is empty */
 	SAY1("DEBUG: list_rm: removing %p\n", bp);
-	if (free_p == NULL)
+	if (tree_p == NULL)
 	{
-		SAY1("DEBUG: list_rm: free_p was null, returning fail %p\n", free_p);
+		SAY1("DEBUG: list_rm: tree_p was null, returning fail %p\n", tree_p);
 		return 0;
 	}
 	
@@ -607,25 +612,25 @@ static int list_rm(void* bp)
 		return 1; 
 	}
 	
-	if (free_p == NULL && free_lastp == NULL)
+	if (tree_p == NULL && free_lastp == NULL)
 	{ /* thge list is empty*/
 		SAY0("DEBUG: list_rm: the list is empty\n");
 		return 1;
 	}
-	SAY3("DEBUG: list_rm: free_p: [%p] bp: [%p] free_lastp: [%p]\n", free_p, bp, free_lastp);
-	if (free_p == bp && free_lastp == bp) 
+	SAY3("DEBUG: list_rm: tree_p: [%p] bp: [%p] free_lastp: [%p]\n", tree_p, bp, free_lastp);
+	if (tree_p == bp && free_lastp == bp) 
 	{ /* it's the only one in the list */
-		free_p = NULL;
+		tree_p = NULL;
 		free_lastp = NULL;
 		return 1;
 	}
 	SAY("DEBUG: list_rm: not the only one in the list\n");
 	/* else if it's first one in list	*/
-	if (free_p == bp)
+	if (tree_p == bp)
 	{
 		void* bp_of_next = BP_TO_NEXT_FREE(bp);
 		SAY2("DEBUG: list_rm: %p comes out to %p\n", bp, PREV_FREE(bp_of_next));
-		free_p = bp_of_next;
+		tree_p = bp_of_next;
 		BP_TO_PREV_FREE(bp_of_next) = NULL;
 		return 1;
 	}
@@ -699,14 +704,14 @@ static void *find_fit(size_t asize)
  /* Best fit search */
 	
 	/*CASE: list is empty, so no fit, DUH */
-	if(free_p == NULL) 
+	if(tree_p == NULL) 
 	{
 		SAY("DEBUG: find_fit: List is empty, returning\n");
 		return 0;
 	}	
 	
 	/* begin search at the beginning of the list */
-    void *bp = free_p;
+    void *bp = tree_p;
 	
 	void *best = NULL; /* return NULL if none found */
 	size_t best_size = (size_t)-1;	/* Gets the max size of size_t */
@@ -748,9 +753,9 @@ static int list_search(void* bp)
 	//SAY0("DEBUG: list_search: entering\n");
 	
 	/* Check if list is uninitialized */
-	if (free_p == NULL) return 0; /* Not in the list */
+	if (tree_p == NULL) return 0; /* Not in the list */
 	
-	void * lp = free_p;
+	void * lp = tree_p;
 	//SAY2("DEBUG: list_search: lp is %p, bp is %p \n", lp, bp);
 	
 	if (bp == NULL)
@@ -784,10 +789,10 @@ static int list_search(void* bp)
  */
 static void printlist()
 {
-	void *bp = free_p;
+	void *bp = tree_p;
 	SAY("DEBUG: ------------- Printing Free List -------------\n");
-	SAY2("DEBUG: free_p: [%p] free_lastp: [%p]\n", free_p, free_lastp);
-    for (bp = free_p; bp != NULL; bp = BP_TO_NEXT_FREE(bp)) {
+	SAY2("DEBUG: tree_p: [%p] free_lastp: [%p]\n", tree_p, free_lastp);
+    for (bp = tree_p; bp != NULL; bp = BP_TO_NEXT_FREE(bp)) {
 			//SAY1("DEBUG: printlist: in the loop and bp is [%p]\n", bp);
 			printblock(bp);
 		}
