@@ -77,7 +77,6 @@ team_t team = {
 
 /* DEBUG: 1 if true, 0 if false. Will say more things if true.*/
 #define DEBUG	0
-
 /* Call heapchecker */
 #define	CHEAP() {if(DEBUG)mm_check(0);fflush(stdout);}
 #define	PLIST() {if(DEBUG)printlist();;fflush(stdout);}
@@ -535,16 +534,49 @@ static int list_add(void* bp)
 		PLIST()
 		return 1;
 	}
-	else //if (free_p == bp)
+	else
 	{
-		/*list wasn't empty; inserting into the beginning of the list */
+		/* list wasn't empty; inserting into the list, sorted from size low -> high */
+		
 		SAY0("DEBUG: list_add: list wasn't empty, inserting at beginning\n");
 		SAY2("DEBUG: list_add: free_p: [%p], bp: [%p] \n", free_p, bp);
-		void* old_first = free_p;
-		BP_TO_PREV_FREE(bp) = NULL;
-		BP_TO_NEXT_FREE(bp) = old_first;
-		BP_TO_PREV_FREE(old_first) = bp;
-		free_p = bp;
+		void* lp = free_p; /* hold last pointer, loop pointer */
+		
+		while(GET_SIZE(HDRP(bp)) > GET_SIZE(HDRP(lp)) && BP_TO_NEXT_FREE(lp) != NULL)
+		{
+			lp = BP_TO_NEXT_FREE(lp);
+		}
+		
+		
+		/* if between two blocks */
+		if (lp != free_p && lp != free_lastp)
+		{	
+			SAY("DEBUG: list_add: add between two blocks\n");
+			void* new_prev = BP_TO_PREV_FREE(lp);
+			BP_TO_NEXT_FREE(new_prev) = bp;
+			BP_TO_NEXT_FREE(bp) = lp;
+			BP_TO_PREV_FREE(bp) = new_prev;
+			BP_TO_PREV_FREE(lp) = bp;
+		}
+		/* If at end of list */
+		else if(lp == free_lastp)
+		{
+			SAY("DEBUG: list_add: add to list end\n");
+			BP_TO_NEXT_FREE(lp) = bp;
+			BP_TO_PREV_FREE(bp) = lp;
+			BP_TO_NEXT_FREE(bp) = NULL;
+			free_lastp = bp;
+		}
+		/* if at beginning of list */
+		else if(lp == free_p)
+		{
+			SAY("DEBUG: list_add: add to list beginning\n");
+			BP_TO_PREV_FREE(bp) = NULL;
+			BP_TO_NEXT_FREE(bp) = lp;
+			BP_TO_PREV_FREE(lp) = bp;
+			free_p = bp;
+		}
+		
 		SAY3("DEBUG: list_add: bp: %p BP_TO_PREV_FREE(bp):%p BP_TO_NEXT_FREE(bp): %p\n", bp, BP_TO_PREV_FREE(bp), BP_TO_NEXT_FREE(bp));
 		SAY("DEBUG: list_add: State of list after list_add:\n");
 		PLIST()
@@ -600,20 +632,22 @@ static int list_rm(void* bp)
 	/* else if it's the last one in the list */
 	if (free_lastp == bp)
 	{
+		SAY("DEBUG: list_rm: It's last in list\n");
 		void* bp_of_prev = BP_TO_PREV_FREE(bp);
 		free_lastp = bp_of_prev;
-		BP_TO_NEXT_FREE(bp_of_prev) = NULL;
+		SAY2("DEBUG: list_rm: bp_of_prev:%p BP_TO_PREV_FREE:%p\n",bp_of_prev,BP_TO_PREV_FREE(bp));
+		BP_TO_NEXT_FREE(BP_TO_PREV_FREE(bp)) = NULL;
 		return 1;
 	}
 	/* else it's in the middle */
- 	
+ 	SAY("DEBUG: list_rm: It's in the middle\n");
 	void* bp_of_prev = BP_TO_PREV_FREE(bp);
 	void* bp_of_next = BP_TO_NEXT_FREE(bp);
 	SAY3("DEBUG: list_rm: %p %p %p\n", bp, bp_of_prev, bp_of_next);
 	BP_TO_PREV_FREE(bp_of_next) = BP_TO_PREV_FREE(bp);
-	SAY("DEBUG: list_rm: Made it here 7\n");
+	SAY1("DEBUG: list_rm: BP_TO_NEXT_FREE(bp) is %p\n", BP_TO_NEXT_FREE(bp));
+	SAY1("DEBUG: list_rm: bp_of_prev is %p\n",bp_of_prev );
 	BP_TO_NEXT_FREE(bp_of_prev) = BP_TO_NEXT_FREE(bp);
-	SAY("DEBUG: list_rm: Made it here 8\n");
 	
 
 	return 0;
@@ -711,13 +745,13 @@ static void *find_fit(size_t asize)
  */
 static int list_search(void* bp)
 {
-	SAY0("DEBUG: list_search: entering\n");
+	//SAY0("DEBUG: list_search: entering\n");
 	
 	/* Check if list is uninitialized */
 	if (free_p == NULL) return 0; /* Not in the list */
 	
 	void * lp = free_p;
-	SAY2("DEBUG: list_search: lp is %p, bp is %p \n", lp, bp);
+	//SAY2("DEBUG: list_search: lp is %p, bp is %p \n", lp, bp);
 	
 	if (bp == NULL)
 	{
