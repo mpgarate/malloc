@@ -76,7 +76,7 @@ team_t team = {
 #define BP_TO_PREV_FREE(bp) (((void**)bp)[1])
 
 /* DEBUG: 1 if true, 0 if false. Will say more things if true.*/
-#define DEBUG	0
+#define DEBUG	1
 /* Call heapchecker */
 #define	CHEAP() {if(DEBUG)mm_check(0);fflush(stdout);}
 #define	PLIST() {if(DEBUG)printlists();;fflush(stdout);}
@@ -399,6 +399,7 @@ static void *coalesce(void *bp)
  */
 void *mm_realloc(void *ptr, size_t size)
 {
+	SAY("DEBUG: mm_realloc\n");
     size_t oldsize;
     void *newptr;
 
@@ -412,8 +413,27 @@ void *mm_realloc(void *ptr, size_t size)
     if(ptr == NULL) {
 	return mm_malloc(size);
     }
+	
+	void* nextblock = (void*)GET(NEXT_BLKP(HDRP(ptr)));
+	if(nextblock != NULL && !GET_ALLOC(HDRP(nextblock)))
+	{
+		SAY("DEBUG: mm_realloc: through first if\n");
+		if (GET_SIZE(HDRP(ptr)) + GET_SIZE(HDRP(nextblock)) >= size)
+		{
+			SAY("DEBUG: mm_realloc: trying trick\n");
+			/* delete the adjacent free block from the list */
+			list_rm(nextblock);
+			/* update header of block to return*/
+			place(ptr, size);
+			newptr = ptr;
+		}
+		else newptr = mm_malloc(size);
+	}
+	else
+	{
+		newptr = mm_malloc(size);
+	}
 
-    newptr = mm_malloc(size);
 
     /* If realloc() fails the original block is left untouched  */
     if(!newptr) {
