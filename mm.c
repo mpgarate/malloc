@@ -76,7 +76,7 @@ team_t team = {
 #define BP_TO_PREV_FREE(bp) (((void**)bp)[1])
 
 /* DEBUG: 1 if true, 0 if false. Will say more things if true.*/
-#define DEBUG	0
+#define DEBUG	1
 /* Call heapchecker */
 #define	CHEAP() {if(DEBUG)mm_check(0);fflush(stdout);}
 #define	PLIST() {if(DEBUG)printlists();;fflush(stdout);}
@@ -584,50 +584,115 @@ static int list_add(void* bp)
 	}
 	else
 	{
+		size_t bp_size = GET_SIZE(HDRP(bp));
+		size_t index_size = GET_SIZE(HDRP(current_list));
+		int left = 1;
+		/* Insert block to the right if greater than index */
+		if (bp_size > index_size)
+		{
+			left = 0;
+		}
+		SAY("DEBUG: list_add: bp_size is greater than index_size. Insert on the \n");
 		/* list wasn't empty; inserting into the list, sorted from size low -> high */
 		
 		SAY0("DEBUG: list_add: list wasn't empty, inserting at beginning\n");
 		SAY2("DEBUG: list_add: current_list: [%p], bp: [%p] \n", current_list, bp);
 		void* lp = current_list; /* hold last pointer, loop pointer */
 		
-		while(GET_SIZE(HDRP(bp)) > GET_SIZE(HDRP(lp)) && BP_TO_NEXT_FREE(lp) != NULL)
+		if (BP_TO_NEXT_FREE(lp) != NULL && BP_TO_PREV_FREE(lp) != NULL)
 		{
-			lp = BP_TO_NEXT_FREE(lp);
-		}
-		
-		
-		/* if between two blocks */
-		if (lp != current_list && lp != free_lastp)
-		{	
-			SAY("DEBUG: list_add: add between two blocks\n");
-			void* new_prev = BP_TO_PREV_FREE(lp);
-			BP_TO_NEXT_FREE(new_prev) = bp;
-			BP_TO_NEXT_FREE(bp) = lp;
-			BP_TO_PREV_FREE(bp) = new_prev;
-			BP_TO_PREV_FREE(lp) = bp;
-		}
-		/* If at end of list */
-		else if(lp == free_lastp)
-		{
-			SAY("DEBUG: list_add: add to list end\n");
-			BP_TO_NEXT_FREE(lp) = bp;
-			BP_TO_PREV_FREE(bp) = lp;
-			BP_TO_NEXT_FREE(bp) = NULL;
-			if (free_lastp < bp)
+			SAY("DEBUG: list_add: at between two blocks in list\n");
+			if (left) /* place to the left */
 			{
-				free_lastp = bp;
+				SAY("DEBUG: list_add: add to list left\n");
+				void *new_prev = BP_TO_PREV_FREE(lp);
+				BP_TO_PREV_FREE(bp) = new_prev;
+				BP_TO_NEXT_FREE(new_prev) = bp;
+				BP_TO_PREV_FREE(lp) = bp;
+			}
+			else	/* place to the right */
+			{
+				SAY("DEBUG: list_add: add to list right\n");
+				void *new_next = BP_TO_NEXT_FREE(lp);
+				BP_TO_PREV_FREE(new_next) = bp;
+				BP_TO_PREV_FREE(bp) = lp;
+				BP_TO_NEXT_FREE(lp) = bp;
 			}
 		}
-		/* if at beginning of list */
-		else if(lp == current_list)
+		else if (BP_TO_NEXT_FREE(lp) == NULL && BP_TO_PREV_FREE(lp) == NULL)
 		{
-			SAY("DEBUG: list_add: add to list beginning\n");
-			BP_TO_PREV_FREE(bp) = NULL;
-			BP_TO_NEXT_FREE(bp) = lp;
-			BP_TO_PREV_FREE(lp) = bp;
-			lists[index] = bp;
+			SAY("DEBUG: list_add: one item already in list\n");
+			if (left) /* place to the left */
+			{
+				SAY("DEBUG: list_add: add to list left\n");
+				BP_TO_PREV_FREE(bp) = NULL;
+				BP_TO_NEXT_FREE(bp) = lp;
+				BP_TO_PREV_FREE(lp) = bp;
+			}
+			else /* place to the right */
+			{
+				SAY("DEBUG: list_add: add to list right\n");
+				BP_TO_NEXT_FREE(lp) = bp;
+				BP_TO_NEXT_FREE(bp) = NULL;
+				BP_TO_PREV_FREE(bp) = lp;
+					/* Update last_p */
+				if (free_lastp < bp)
+				{
+					free_lastp = bp;
+				}
+			}
 		}
-		
+		else if(BP_TO_NEXT_FREE(lp) == NULL)
+		{
+			SAY("DEBUG: list_add: at far right of list\n");
+			if (left) /* place to the left */
+			{
+				SAY("DEBUG: list_add: add to list left\n");
+				void *new_prev = BP_TO_PREV_FREE(lp);
+				BP_TO_NEXT_FREE(new_prev) = bp;
+				BP_TO_PREV_FREE(bp) = new_prev;
+				BP_TO_NEXT_FREE(bp) = lp;
+				BP_TO_PREV_FREE(lp) = bp;
+			}
+			else /* place to the right */
+			{
+				SAY("DEBUG: list_add: add to list right\n");
+				BP_TO_NEXT_FREE(lp) = bp;
+				BP_TO_NEXT_FREE(bp) = NULL;
+				BP_TO_PREV_FREE(bp) = lp;
+					/* Update last_p */
+				if (free_lastp < bp)
+				{
+					free_lastp = bp;
+				}
+			}
+			
+		}
+		/* if at far left of list */
+		else if(BP_TO_PREV_FREE(lp) == NULL)
+		{
+			SAY("DEBUG: list_add: at far left of list\n");
+			if (left) /* place to the left */
+			{
+				SAY("DEBUG: list_add: add to list left\n");
+				BP_TO_NEXT_FREE(bp) = lp;
+				BP_TO_PREV_FREE(bp) = NULL;
+				BP_TO_PREV_FREE(lp) = bp;
+			}
+			else /* place to the right */
+			{
+				SAY("DEBUG: list_add: add to list right\n");
+				void *new_next = BP_TO_NEXT_FREE(lp);
+				BP_TO_NEXT_FREE(bp) = new_next;
+				BP_TO_NEXT_FREE(lp) = bp;
+				BP_TO_PREV_FREE(bp) = lp;
+					/* Update last_p */
+				if (free_lastp < bp)
+				{
+					free_lastp = bp;
+				}
+			}
+		}
 		SAY3("DEBUG: list_add: bp: %p BP_TO_PREV_FREE(bp):%p BP_TO_NEXT_FREE(bp): %p\n", bp, BP_TO_PREV_FREE(bp), BP_TO_NEXT_FREE(bp));
 		SAY("DEBUG: list_add: State of list after list_add:\n");
 		//PLIST()
@@ -670,6 +735,7 @@ static int list_rm(void* bp)
 		return 1;
 	}
 	SAY("DEBUG: list_rm: not the only one in the list\n");
+	
 	/* else if it's first one in list	*/
 	if (current_list == bp)
 	{
@@ -679,7 +745,7 @@ static int list_rm(void* bp)
 		BP_TO_PREV_FREE(bp_of_next) = NULL;
 		return 1;
 	}
-	/* else if it's the last one in the list */
+	/* else if it's farthest to the right one in the list */
 	if (BP_TO_NEXT_FREE(bp) == NULL)
 	{
 		SAY("DEBUG: list_rm: It's last in list\n");
@@ -690,6 +756,14 @@ static int list_rm(void* bp)
 		}
 		SAY2("DEBUG: list_rm: bp_of_prev:%p BP_TO_PREV_FREE:%p\n",bp_of_prev,BP_TO_PREV_FREE(bp));
 		BP_TO_NEXT_FREE(BP_TO_PREV_FREE(bp)) = NULL;
+		return 1;
+	}
+	if (BP_TO_PREV_FREE(bp) == NULL)
+	{
+		SAY("DEBUG: list_rm: It's farthest left in list\n");
+		void* bp_of_next = BP_TO_NEXT_FREE(bp);
+		SAY2("DEBUG: list_rm: bp_of_prev:%p BP_TO_NEXT_FREE:%p\n",bp_of_next,BP_TO_NEXT_FREE(bp));
+		BP_TO_PREV_FREE(BP_TO_NEXT_FREE(bp)) = NULL;
 		return 1;
 	}
 	/* else it's in the middle */
@@ -763,6 +837,20 @@ static void *find_fit(size_t asize, int index)
 	}	
 
 	/* begin search at the beginning of the list */
+	//SAY("DEBUG: find_fit: determining left/right\n");
+	//void* next_free = BP_TO_NEXT_FREE(current_list);
+	//SAY("DEBUG: find_fit: set next_free\n");
+	size_t index_size = GET_SIZE(HDRP(current_list));
+	SAY("DEBUG: find_fit: got size\n");
+	int left = 1;
+	/* Scan to the right right if size greater than index */
+	if (asize > index_size)
+	{
+		left = 0;
+	}
+	
+	SAY1("DEBUG: find_fit: determined left is %i\n", left);
+	
     void *bp = current_list;
 	
 	void *best = NULL; /* return NULL if none found */
@@ -784,7 +872,8 @@ static void *find_fit(size_t asize, int index)
 			best_size = curr_size;
 			best = bp;
 		}
-		bp = BP_TO_NEXT_FREE(bp);
+		if(left) bp = BP_TO_NEXT_FREE(bp);
+		else bp = BP_TO_PREV_FREE(bp);
 	}
 	if(best_size == ((size_t)-1))
 	{
@@ -872,14 +961,19 @@ static void printlists()
 {
 	void* block = lists[index];
 
-	SAY1("DEBUG: ------------- Printing Free List %d -------------\n", index);
+	SAY1("DEBUG: ------------- Printing Free List %d to the left -------------\n", index);
 
 	SAY2("DEBUG: block: [%p] free_lastp: [%p]\n", block, free_lastp);
 	for (block = lists[index]; block != NULL; block = BP_TO_NEXT_FREE(block))
 		{
 			printblock(block);
 		}
-	SAY1("DEBUG: ------------- End Free List Print %d ------------\n", index);
+	SAY1("DEBUG: ------------- End Free List Print %d to the right ------------\n", index);
+	for (block = lists[index]; block != NULL; block = BP_TO_PREV_FREE(block))
+		{
+			printblock(block);
+		}
+	SAY1("DEBUG: ------------------- End Free List Print %d -------------------\n", index);
 }
 
 
