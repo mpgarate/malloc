@@ -82,24 +82,24 @@ team_t team = {
 #define	PLIST() {if(DEBUG)printlists();;fflush(stdout);}
 
 /*
-#define LIST_0_SIZE (unsigned int)(50)
-#define LIST_1_SIZE (unsigned int)(200)
-#define LIST_2_SIZE (unsigned int)(750)
-#define LIST_3_SIZE (unsigned int)(2000)
-#define LIST_4_SIZE (unsigned int)(5000)
-#define LIST_5_SIZE (unsigned int)(20000)
-#define LIST_6_SIZE (unsigned int)(50000)
-#define LIST_7_SIZE (unsigned int)(100000)
+#define LIST_0_SIZE (unsigned int)(500)
+#define LIST_1_SIZE (unsigned int)(2000)
+#define LIST_2_SIZE (unsigned int)(5000)
+#define LIST_3_SIZE (unsigned int)(10000)
+#define LIST_4_SIZE (unsigned int)(30000)
+#define LIST_5_SIZE (unsigned int)(50000)
+#define LIST_6_SIZE (unsigned int)(100000)
+#define LIST_7_SIZE (unsigned int)(500000)
 */
 
-#define LIST_0_SIZE (unsigned int)(50)
-#define LIST_1_SIZE (unsigned int)(100)
-#define LIST_2_SIZE (unsigned int)(100)
-#define LIST_3_SIZE (unsigned int)(100)
-#define LIST_4_SIZE (unsigned int)(100)
-#define LIST_5_SIZE (unsigned int)(100)
-#define LIST_6_SIZE (unsigned int)(100)
-#define LIST_7_SIZE (unsigned int)(100)
+#define LIST_0_SIZE (unsigned int)(5000)
+#define LIST_1_SIZE (unsigned int)(7000)
+#define LIST_2_SIZE (unsigned int)(12000)
+#define LIST_3_SIZE (unsigned int)(17000)
+#define LIST_4_SIZE (unsigned int)(30000)
+#define LIST_5_SIZE (unsigned int)(50000)
+#define LIST_6_SIZE (unsigned int)(100000)
+#define LIST_7_SIZE (unsigned int)(500000)
 
 /* Epic macros for SAY */
 #define SAY(fmt)		SAY0(fmt)
@@ -404,8 +404,8 @@ void *mm_realloc(void *ptr, size_t size)
 
     /* If size == 0 then this is just free, and we return NULL. */
     if(size == 0) {
-	mm_free(ptr);
-	return 0;
+		mm_free(ptr);
+		return 0;
     }
 
     /* If oldptr is NULL, then this is just malloc. */
@@ -756,10 +756,12 @@ static void *find_fit(size_t asize, int index)
 	/*CASE: list is empty, so no fit, DUH */
 	if(current_list == NULL) 
 	{
-		SAY("DEBUG: find_fit: List is empty, returning\n");
-		return 0;
+		SAY2("DEBUG: find_fit: List is empty, calling find_fit(%u, %i)\n", asize, index+1);
+		
+		if (index<7) return find_fit(asize, ++index);
+		else return NULL;
 	}	
-	
+
 	/* begin search at the beginning of the list */
     void *bp = current_list;
 	
@@ -786,7 +788,8 @@ static void *find_fit(size_t asize, int index)
 	}
 	if(best_size == ((size_t)-1))
 	{
-		if (index<9) 
+		SAY("DEBUG: find_fit: the best_size was not so great \n");
+		if (index<7) 
 		{
 			SAY2("DEBUG: find_fit: didn't find fit with index %i for size %u\n", index, asize);
 			best = find_fit(asize, ++index);
@@ -814,14 +817,19 @@ static int list_search(void* bp)
 	//SAY0("DEBUG: list_search: entering\n");
 	
 	/* Check if list is uninitialized */
-	if (current_list == NULL) return 0; /* Not in the list */
-	
+	if (current_list == NULL) 
+	{
+		SAY("Not in list. Uninitialized. \n");
+		Assert(0==1);
+		return 0; /* Not in the list */
+	}
 	void * lp = current_list;
 	//SAY2("DEBUG: list_search: lp is %p, bp is %p \n", lp, bp);
 	
 	if (bp == NULL)
 	{
-		//SAY1("DEBUG: list_search: lp was null %p \n", lp);
+		SAY1("DEBUG: list_search: lp was null %p \n", lp);
+		Assert(0==1);
 		return 0; /* not in the list */
 	}
 	
@@ -839,7 +847,8 @@ static int list_search(void* bp)
 			return 1;
 		}
 	}
-		//SAY("DEBUG: list_search: did not find matching blocks in loop.\n");
+		SAY("DEBUG: list_search: did not find matching blocks in loop.\n");
+		Assert(0==1);
 	return 0;
 	}
 
@@ -955,7 +964,7 @@ static int get_index(size_t size)
 	else if (size < LIST_6_SIZE){
 		index = 6;
 	}
-	else if (size < LIST_7_SIZE){
+	else{
 		index = 7;
 	}
 	return index;
