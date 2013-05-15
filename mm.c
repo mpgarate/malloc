@@ -76,16 +76,21 @@ team_t team = {
 #define BP_TO_PREV_FREE(bp) (((void**)bp)[1])
 
 /* TREE MACROS */
-#define BP_TO_LEFT(bp)		BP_TO_NEXT_FREE(bp)
-#define BP_TO_RIGHT(bp)		BP_TO_PREV_FREE(bp)
-#define	BP_TO_PARENT(bp)	(((void**)bp)[2])
 
 /* DEBUG: 1 if true, 0 if false. Will say more things if true.*/
 #define DEBUG	1
 /* Call heapchecker */
 #define	CHEAP() {if(DEBUG)mm_check(0);fflush(stdout);}
-#define	PLIST() {if(DEBUG)printlist();;fflush(stdout);}
+#define	PLIST() {if(DEBUG)printlists();;fflush(stdout);}
 
+#define LIST_0_SIZE (unsigned int)(50)
+#define LIST_1_SIZE (unsigned int)(200)
+#define LIST_2_SIZE (unsigned int)(750)
+#define LIST_3_SIZE (unsigned int)(2000)
+#define LIST_4_SIZE (unsigned int)(5000)
+#define LIST_5_SIZE (unsigned int)(20000)
+#define LIST_6_SIZE (unsigned int)(50000)
+#define LIST_7_SIZE (unsigned int)(100000)
 
 /* Epic macros for SAY */
 #define SAY(fmt)		SAY0(fmt)
@@ -117,13 +122,13 @@ void doAssert(int c)
 /* Global variables */
 static char *heap_listp = 0;  /* Pointer to first block */
 static char *heap_lastp = 0; /* pointer to last free block */
-static void* tree_p;		/* Point to first free list item */
+static void **lists;		/* Point to first free list item */
 static void* free_lastp;	/* Point to last free list item*/
 
 /* Function prototypes for internal helper routines */
 static void *extend_heap(size_t words);
 static void place(void *bp, size_t asize);
-static void *find_fit(size_t asize);
+static void *find_fit(size_t asize, int index);
 static void *coalesce(void *bp);
 static void printblock(void *bp); 
 static void checkblock(void *bp);
@@ -135,10 +140,14 @@ void mm_check(int verbose);
 static int list_add(void* bp); 
 /* Delete to list, return 1 if success and 0 if fail */
 static int list_rm(void* bp);
-/* Print the list */
-static void printlist();
+/* Print a single list */
+static void printlist(int index);
+/* Driver to print all lists*/
+static void printlists();
 /* Check if block is in the list */
 static int list_search(void* bp);
+/* Return the appropriate list index for a given size */
+static int get_index(size_t size);
 
 /* 
  * mm_init - Initialize the memory manager, setting up lists and getting 
@@ -148,15 +157,26 @@ static int list_search(void* bp);
 int mm_init(void) 
 {
     /* Create the initial empty heap */
-    if ((heap_listp = mem_sbrk(8*WSIZE)) == (void *)-1)
+    if ((heap_listp = mem_sbrk(14*WSIZE)) == (void *)-1)
 		return -1;
 		
+	SAY("\ndid initial sbrk\n");
 	heap_lastp = heap_listp;
-	tree_p = NULL;
 	free_lastp = NULL;
-	// one block here is unused
-    heap_listp += (4*WSIZE);
-	
+    heap_listp += (2*WSIZE);
+	lists = (void*) heap_listp;
+	lists[0] = NULL;
+	SAY("\ndid some initial settings\n");
+	lists[1] = NULL;
+	lists[2] = NULL;
+	lists[3] = NULL;
+	lists[4] = NULL;
+	lists[5] = NULL;
+	lists[6] = NULL;
+	lists[7] = NULL;
+	SAY1("\ndid initial lists[i] settings. lists[1] is: [%p]\n", lists[1]);
+    heap_listp += (8*WSIZE);
+
     PUT(heap_listp, 0);                          /* Alignment padding */
 	SAY1("DEBUG: mm_init: heap_listp is %p\n", heap_listp);
     PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1)); /* Prologue header */ 
@@ -167,7 +187,7 @@ int mm_init(void)
 	SAY1("DEBUG: mm_init: heap_listp + 12 is %p\n", heap_listp + (3*WSIZE));
 	SAY1("DEBUG: mm_init: heap_listp + 20 is %p\n", heap_listp + (5*WSIZE));
     heap_listp += (2*WSIZE);
-	
+
 	SAY0("DEBUG: mm_init: calling extend_heap\n");
     /* Extend the empty heap with a free block of CHUNKSIZE bytes */
 	SAY("DEBUG: mm_init: check heap before extend\n");
@@ -210,7 +230,9 @@ void *mm_malloc(size_t size)
 	
 	SAY0("DEBUG: mm_malloc: calling find_fit\n");
     /* Search the free list for a fit */
-    if ((bp = find_fit(asize)) != NULL) {
+
+	int index = get_index(asize);
+    if ((bp = find_fit(asize, index)) != NULL) {
 		SAY2("DEBUG: mm_malloc calling place(%p, %i)\n", bp, asize);
 		list_rm(bp);
 		place(bp, asize);
@@ -224,7 +246,7 @@ void *mm_malloc(size_t size)
     /* No fit found. Get more memory and place the block */
     
 	/* See if we can reduce sbrk call size to merge with existing free block */
-	
+/*
 	SAY2("DEBUG: mm_malloc: heap_lastp: [%p] free_lastp: [%p]\n", heap_lastp, free_lastp);
 	if(heap_lastp != NULL && heap_lastp == free_lastp)
 	{
@@ -245,6 +267,8 @@ void *mm_malloc(size_t size)
 	}
 	
 	extendsize = MAX(extendsize,CHUNKSIZE);
+*/
+	extendsize = MAX(asize,CHUNKSIZE);
     if ((bp = extend_heap(extendsize/WSIZE)) == NULL)
 		return NULL;
 	SAY2("DEBUG: mm_malloc calling place(%p, %i)\n", bp, asize);
@@ -441,27 +465,33 @@ void mm_check(int verbose)
     if ((GET_SIZE(HDRP(bp)) != 0) || !(GET_ALLOC(HDRP(bp))))
 	SAY0("DEBUG: mm_check: ERROR: Bad epilogue header\n");
 	
-	void *fp = tree_p;
-    for (fp = tree_p; fp != NULL; fp = BP_TO_NEXT_FREE(fp)) {
-	
-		/* Check for free blocks not in the list and allocated blocks in the list */
-		if(GET_ALLOC(HDRP(fp)) == list_search(fp))
-		{
-			if (GET_ALLOC(HDRP(fp)) && list_search(fp))
+	/* Loop through each list to check its blocks */
+	int i=0;
+	for (i=0; i<9; i++)
+	{
+		int index = get_index(GET_SIZE(HDRP(bp)));
+		void *fp = lists[index];
+		for (fp=lists[index]; fp != NULL; fp = BP_TO_NEXT_FREE(fp)) {
+		
+			/* Check for free blocks not in the list and allocated blocks in the list */
+			if(GET_ALLOC(HDRP(fp)) == list_search(fp))
 			{
-				SAY1("ERROR: mm_check: allocated block %p in list\n", fp);
-				SAY2("DEBUG: mm_check: allocated block in free list. GET_ALLOC is %i, list_search is %i\n", (GET_ALLOC(HDRP(fp))), list_search(fp));
-				printblock(fp);
-				Assert(!GET_ALLOC(HDRP(fp)));
-			}
-			else
-			{
-				SAY1("ERROR: mm_check: free block %p not in list\n", fp);
-				SAY2("DEBUG: mm_check: GET_ALLOC is %i, list_search is %i\n", (GET_ALLOC(HDRP(fp))), list_search(fp));
-				Assert(0==1);
+				if (GET_ALLOC(HDRP(fp)) && list_search(fp))
+				{
+					SAY1("ERROR: mm_check: allocated block %p in list\n", fp);
+					SAY2("DEBUG: mm_check: allocated block in free list. GET_ALLOC is %i, list_search is %i\n", (GET_ALLOC(HDRP(fp))), list_search(fp));
+					printblock(fp);
+					Assert(!GET_ALLOC(HDRP(fp)));
+				}
+				else
+				{
+					SAY1("ERROR: mm_check: free block %p not in list\n", fp);
+					SAY2("DEBUG: mm_check: GET_ALLOC is %i, list_search is %i\n", (GET_ALLOC(HDRP(fp))), list_search(fp));
+					Assert(0==1);
+				}
 			}
 		}
-		}
+	}
 }
 
 /* 
@@ -517,23 +547,25 @@ static void *extend_heap(size_t words)
  */
 static int list_add(void* bp)
 {
+	int index = get_index(GET_SIZE(HDRP(bp)));
+	void* current_list = lists[index];
 	SAY("DEBUG: list_add: State of list before list_add:\n");
 	PLIST()
 	SAY2("DEBUG: list_add: adding %p, alloc: %i\n", bp, GET_ALLOC(HDRP(bp)));
 	Assert(!GET_ALLOC(HDRP(bp)));
 	
 	/* If list is empty */
-	if (tree_p == NULL)
+	if (current_list == NULL)
 	{
-		SAY0("DEBUG: list_add: nothing in list yet\n");
+		SAY0("DEBUG: list_add: nothing in tree yet\n");
 		/* Create list */
-		tree_p = bp;
-		free_lastp = bp; /* last free block */
+		lists[index] = bp;
+		free_lastp = bp; /* last free block in heap */
 		
 		/* If the list is empty, the block's next and previous pointers should be NULL */
 		
-		BP_TO_PREV_FREE(bp) = NULL; 
-		BP_TO_NEXT_FREE(bp) = NULL;
+		BP_TO_NEXT_FREE(bp) = NULL; 
+		BP_TO_PREV_FREE(bp) = NULL;
 		SAY3("DEBUG: list_add: bp: %p BP_TO_PREV_FREE(bp):%p BP_TO_NEXT_FREE(bp): %p\n", bp, BP_TO_PREV_FREE(bp), BP_TO_NEXT_FREE(bp));
 		SAY("DEBUG: list_add: State of list after list_add:\n");
 		PLIST()
@@ -544,8 +576,8 @@ static int list_add(void* bp)
 		/* list wasn't empty; inserting into the list, sorted from size low -> high */
 		
 		SAY0("DEBUG: list_add: list wasn't empty, inserting at beginning\n");
-		SAY2("DEBUG: list_add: tree_p: [%p], bp: [%p] \n", tree_p, bp);
-		void* lp = tree_p; /* hold last pointer, loop pointer */
+		SAY2("DEBUG: list_add: current_list: [%p], bp: [%p] \n", current_list, bp);
+		void* lp = current_list; /* hold last pointer, loop pointer */
 		
 		while(GET_SIZE(HDRP(bp)) > GET_SIZE(HDRP(lp)) && BP_TO_NEXT_FREE(lp) != NULL)
 		{
@@ -554,7 +586,7 @@ static int list_add(void* bp)
 		
 		
 		/* if between two blocks */
-		if (lp != tree_p && lp != free_lastp)
+		if (lp != current_list && lp != free_lastp)
 		{	
 			SAY("DEBUG: list_add: add between two blocks\n");
 			void* new_prev = BP_TO_PREV_FREE(lp);
@@ -573,13 +605,13 @@ static int list_add(void* bp)
 			free_lastp = bp;
 		}
 		/* if at beginning of list */
-		else if(lp == tree_p)
+		else if(lp == current_list)
 		{
 			SAY("DEBUG: list_add: add to list beginning\n");
 			BP_TO_PREV_FREE(bp) = NULL;
 			BP_TO_NEXT_FREE(bp) = lp;
 			BP_TO_PREV_FREE(lp) = bp;
-			tree_p = bp;
+			lists[index] = bp;
 		}
 		
 		SAY3("DEBUG: list_add: bp: %p BP_TO_PREV_FREE(bp):%p BP_TO_NEXT_FREE(bp): %p\n", bp, BP_TO_PREV_FREE(bp), BP_TO_NEXT_FREE(bp));
@@ -600,42 +632,41 @@ return 0;
 
 static int list_rm(void* bp)
 {	/* If list is empty */
+	int index = get_index(GET_SIZE(HDRP(bp)));
+	void* current_list = lists[index];
 	SAY1("DEBUG: list_rm: removing %p\n", bp);
-	if (tree_p == NULL)
+	if (current_list == NULL)
 	{
-		SAY1("DEBUG: list_rm: tree_p was null, returning fail %p\n", tree_p);
+		SAY1("DEBUG: list_rm: current_list was null, returning fail %p\n", current_list);
 		return 0;
 	}
-	
 	if(GET_ALLOC(HDRP(bp))) {
 		SAY1("DEBUG: list_rm: Someone's trying to remove an allocated block from the free list %p\n", bp);
 		return 1; 
 	}
 	
-	if (tree_p == NULL && free_lastp == NULL)
-	{ /* thge list is empty*/
-		SAY0("DEBUG: list_rm: the list is empty\n");
-		return 1;
-	}
-	SAY3("DEBUG: list_rm: tree_p: [%p] bp: [%p] free_lastp: [%p]\n", tree_p, bp, free_lastp);
-	if (tree_p == bp && free_lastp == bp) 
+	SAY3("DEBUG: list_rm: current_list: [%p] bp: [%p] free_lastp: [%p]\n", current_list, bp, free_lastp);
+	if (current_list == bp && BP_TO_NEXT_FREE(bp) == NULL) 
 	{ /* it's the only one in the list */
-		tree_p = NULL;
-		free_lastp = NULL;
+		lists[index] = NULL;
+		if (free_lastp != NULL && bp > free_lastp)
+		{
+			free_lastp = NULL;
+		}
 		return 1;
 	}
 	SAY("DEBUG: list_rm: not the only one in the list\n");
 	/* else if it's first one in list	*/
-	if (tree_p == bp)
+	if (current_list == bp)
 	{
 		void* bp_of_next = BP_TO_NEXT_FREE(bp);
 		SAY2("DEBUG: list_rm: %p comes out to %p\n", bp, PREV_FREE(bp_of_next));
-		tree_p = bp_of_next;
+		lists[index] = bp_of_next;
 		BP_TO_PREV_FREE(bp_of_next) = NULL;
 		return 1;
 	}
 	/* else if it's the last one in the list */
-	if (free_lastp == bp)
+	if (BP_TO_NEXT_FREE(bp) == NULL)
 	{
 		SAY("DEBUG: list_rm: It's last in list\n");
 		void* bp_of_prev = BP_TO_PREV_FREE(bp);
@@ -699,19 +730,21 @@ static void place(void *bp, size_t asize)
  */
  
  /* TODO: make this get fit from free list */
-static void *find_fit(size_t asize)
+static void *find_fit(size_t asize, int index)
 {
- /* Best fit search */
+	void* current_list = lists[index];
+	
+	/* Best fit search */
 	
 	/*CASE: list is empty, so no fit, DUH */
-	if(tree_p == NULL) 
+	if(current_list == NULL) 
 	{
 		SAY("DEBUG: find_fit: List is empty, returning\n");
 		return 0;
 	}	
 	
 	/* begin search at the beginning of the list */
-    void *bp = tree_p;
+    void *bp = current_list;
 	
 	void *best = NULL; /* return NULL if none found */
 	size_t best_size = (size_t)-1;	/* Gets the max size of size_t */
@@ -734,6 +767,14 @@ static void *find_fit(size_t asize)
 		}
 		bp = BP_TO_NEXT_FREE(bp);
 	}
+	if(best_size>asize)
+	{
+		if (index>0) 
+		{
+			best = find_fit(asize, index-1);
+		}
+		else return NULL;
+	}
 	
 	SAY2("DEBUG: find_fit: after loop, %p is best, size is: %i\n", best, best_size);
 	return best;
@@ -750,12 +791,14 @@ static void *find_fit(size_t asize)
  */
 static int list_search(void* bp)
 {
+	int index = get_index(GET_SIZE(HDRP(bp)));
+	void* current_list = lists[index];
 	//SAY0("DEBUG: list_search: entering\n");
 	
 	/* Check if list is uninitialized */
-	if (tree_p == NULL) return 0; /* Not in the list */
+	if (current_list == NULL) return 0; /* Not in the list */
 	
-	void * lp = tree_p;
+	void * lp = current_list;
 	//SAY2("DEBUG: list_search: lp is %p, bp is %p \n", lp, bp);
 	
 	if (bp == NULL)
@@ -787,17 +830,32 @@ static int list_search(void* bp)
  * loop through items in a free list and call printblock for each.
  *
  */
-static void printlist()
-{
-	void *bp = tree_p;
-	SAY("DEBUG: ------------- Printing Free List -------------\n");
-	SAY2("DEBUG: tree_p: [%p] free_lastp: [%p]\n", tree_p, free_lastp);
-    for (bp = tree_p; bp != NULL; bp = BP_TO_NEXT_FREE(bp)) {
-			//SAY1("DEBUG: printlist: in the loop and bp is [%p]\n", bp);
-			printblock(bp);
+
+static void printlists()
+{	
+	SAY0("DEBUG: ============= PRINTING ALL LISTS =============\n");
+	int index = 0;
+	for (index = 0; index < 9; index++)
+		{
+			printlist(index);
 		}
-	SAY("DEBUG: ------------- End Free List Print ------------\n");
+	SAY0("DEBUG: ================ END ALL LISTS ================\n");	
 }
+	static void printlist(int index)
+{
+	void* block = lists[index];
+
+	SAY1("DEBUG: ------------- Printing Free List %d -------------\n", index);
+
+	SAY2("DEBUG: block: [%p] free_lastp: [%p]\n", block, free_lastp);
+	for (block = lists[index]; block != NULL; block = BP_TO_NEXT_FREE(block))
+		{
+			printblock(block);
+		}
+	SAY1("DEBUG: ------------- End Free List Print %d ------------\n", index);
+}
+
+
 
 static void printblock(void *bp) 
 {
@@ -840,4 +898,35 @@ static void checkblock(void *bp)
 		printf("Error: header does not match footer\n");
 		Assert(0==1);
 	}
+}
+
+/* Return the appropriate list index for a given size */
+static int get_index(size_t size)
+{
+	int index = 0;
+	if (size < LIST_0_SIZE) {
+		index = 0;
+	}
+	else if (size < LIST_2_SIZE){
+		index = 1;
+	}
+	else if (size < LIST_2_SIZE){
+		index = 2;
+	}
+	else if (size < LIST_3_SIZE){
+		index = 3;
+	}
+	else if (size < LIST_4_SIZE){
+		index = 4;
+	}
+	else if (size < LIST_5_SIZE){
+		index = 5;
+	}
+	else if (size < LIST_6_SIZE){
+		index = 6;
+	}
+	else if (size < LIST_7_SIZE){
+		index = 7;
+	}
+	return index;
 }
