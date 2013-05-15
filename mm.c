@@ -75,14 +75,13 @@ team_t team = {
 #define BP_TO_NEXT_FREE(bp) (((void**)bp)[0])
 #define BP_TO_PREV_FREE(bp) (((void**)bp)[1])
 
-/* TREE MACROS */
-
 /* DEBUG: 1 if true, 0 if false. Will say more things if true.*/
-#define DEBUG	1
+#define DEBUG	0
 /* Call heapchecker */
 #define	CHEAP() {if(DEBUG)mm_check(0);fflush(stdout);}
 #define	PLIST() {if(DEBUG)printlists();;fflush(stdout);}
 
+/*
 #define LIST_0_SIZE (unsigned int)(50)
 #define LIST_1_SIZE (unsigned int)(200)
 #define LIST_2_SIZE (unsigned int)(750)
@@ -91,6 +90,16 @@ team_t team = {
 #define LIST_5_SIZE (unsigned int)(20000)
 #define LIST_6_SIZE (unsigned int)(50000)
 #define LIST_7_SIZE (unsigned int)(100000)
+*/
+
+#define LIST_0_SIZE (unsigned int)(50)
+#define LIST_1_SIZE (unsigned int)(100)
+#define LIST_2_SIZE (unsigned int)(100)
+#define LIST_3_SIZE (unsigned int)(100)
+#define LIST_4_SIZE (unsigned int)(100)
+#define LIST_5_SIZE (unsigned int)(100)
+#define LIST_6_SIZE (unsigned int)(100)
+#define LIST_7_SIZE (unsigned int)(100)
 
 /* Epic macros for SAY */
 #define SAY(fmt)		SAY0(fmt)
@@ -342,7 +351,7 @@ static void *coalesce(void *bp)
 		SAY1("DEBUG: coalesce: [%p] does not need to be merged. Adding to list and returning\n", bp);
 		list_add(bp);
 		SAY1("DEBUG: coalesce: printing list and returning [%p]\n", bp);
-		PLIST()
+		//PLIST()
 		return bp;
     }
 
@@ -380,7 +389,7 @@ static void *coalesce(void *bp)
 	SAY1("DEBUG: coalesce: returning bp:[%p]\n", bp);
 	SAY0("DEBUG: coalesce: calling mm_check after list_add\n");
 	CHEAP()
-	PLIST()
+	//PLIST()
     return bp;
 }
 
@@ -528,7 +537,7 @@ static void *extend_heap(size_t words)
 	bp = coalesce(bp);
 	
 	SAY("DEBUG: extend_heap: done. calling PLIST()\n");
-	PLIST()
+	//PLIST()
 	SAY("DEBUG: extend_heap: done. calling CHEAP()\n");
 	CHEAP()
 	SAY1("DEBUG: extend_heap: done. returning [%p]\n", bp);
@@ -557,18 +566,20 @@ static int list_add(void* bp)
 	/* If list is empty */
 	if (current_list == NULL)
 	{
-		SAY0("DEBUG: list_add: nothing in tree yet\n");
+		SAY0("DEBUG: list_add: nothing in list yet\n");
 		/* Create list */
 		lists[index] = bp;
-		free_lastp = bp; /* last free block in heap */
-		
+		if (free_lastp == NULL || bp > free_lastp)
+		{
+			free_lastp = bp; /* last free block in heap */
+		}
 		/* If the list is empty, the block's next and previous pointers should be NULL */
 		
 		BP_TO_NEXT_FREE(bp) = NULL; 
 		BP_TO_PREV_FREE(bp) = NULL;
 		SAY3("DEBUG: list_add: bp: %p BP_TO_PREV_FREE(bp):%p BP_TO_NEXT_FREE(bp): %p\n", bp, BP_TO_PREV_FREE(bp), BP_TO_NEXT_FREE(bp));
 		SAY("DEBUG: list_add: State of list after list_add:\n");
-		PLIST()
+		//PLIST()
 		return 1;
 	}
 	else
@@ -602,7 +613,10 @@ static int list_add(void* bp)
 			BP_TO_NEXT_FREE(lp) = bp;
 			BP_TO_PREV_FREE(bp) = lp;
 			BP_TO_NEXT_FREE(bp) = NULL;
-			free_lastp = bp;
+			if (free_lastp < bp)
+			{
+				free_lastp = bp;
+			}
 		}
 		/* if at beginning of list */
 		else if(lp == current_list)
@@ -616,7 +630,7 @@ static int list_add(void* bp)
 		
 		SAY3("DEBUG: list_add: bp: %p BP_TO_PREV_FREE(bp):%p BP_TO_NEXT_FREE(bp): %p\n", bp, BP_TO_PREV_FREE(bp), BP_TO_NEXT_FREE(bp));
 		SAY("DEBUG: list_add: State of list after list_add:\n");
-		PLIST()
+		//PLIST()
 		return 1;
 	}
 return 0;
@@ -670,7 +684,10 @@ static int list_rm(void* bp)
 	{
 		SAY("DEBUG: list_rm: It's last in list\n");
 		void* bp_of_prev = BP_TO_PREV_FREE(bp);
-		free_lastp = bp_of_prev;
+		if (bp_of_prev > free_lastp)
+		{
+			free_lastp = bp_of_prev;
+		}
 		SAY2("DEBUG: list_rm: bp_of_prev:%p BP_TO_PREV_FREE:%p\n",bp_of_prev,BP_TO_PREV_FREE(bp));
 		BP_TO_NEXT_FREE(BP_TO_PREV_FREE(bp)) = NULL;
 		return 1;
@@ -767,11 +784,12 @@ static void *find_fit(size_t asize, int index)
 		}
 		bp = BP_TO_NEXT_FREE(bp);
 	}
-	if(best_size>asize)
+	if(best_size == ((size_t)-1))
 	{
-		if (index>0) 
+		if (index<9) 
 		{
-			best = find_fit(asize, index-1);
+			SAY2("DEBUG: find_fit: didn't find fit with index %i for size %u\n", index, asize);
+			best = find_fit(asize, ++index);
 		}
 		else return NULL;
 	}
@@ -901,6 +919,18 @@ static void checkblock(void *bp)
 }
 
 /* Return the appropriate list index for a given size */
+
+/*
+#define LIST_0_SIZE (unsigned int)(50)
+#define LIST_1_SIZE (unsigned int)(200)
+#define LIST_2_SIZE (unsigned int)(750)
+#define LIST_3_SIZE (unsigned int)(2000)
+#define LIST_4_SIZE (unsigned int)(5000)
+#define LIST_5_SIZE (unsigned int)(20000)
+#define LIST_6_SIZE (unsigned int)(50000)
+#define LIST_7_SIZE (unsigned int)(100000)
+*/
+
 static int get_index(size_t size)
 {
 	int index = 0;
