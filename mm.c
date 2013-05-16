@@ -81,17 +81,6 @@ team_t team = {
 #define	CHEAP() {if(DEBUG)mm_check(0);fflush(stdout);}
 #define	PLIST() {if(DEBUG)printlists();;fflush(stdout);}
 
-/*
-#define LIST_0_SIZE (unsigned int)(500)
-#define LIST_1_SIZE (unsigned int)(2000)
-#define LIST_2_SIZE (unsigned int)(5000)
-#define LIST_3_SIZE (unsigned int)(10000)
-#define LIST_4_SIZE (unsigned int)(30000)
-#define LIST_5_SIZE (unsigned int)(50000)
-#define LIST_6_SIZE (unsigned int)(100000)
-#define LIST_7_SIZE (unsigned int)(500000)
-*/
-
 #define LIST_0_SIZE (unsigned int)(5000)
 #define LIST_1_SIZE (unsigned int)(7000)
 #define LIST_2_SIZE (unsigned int)(12000)
