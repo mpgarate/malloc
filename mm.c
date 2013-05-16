@@ -76,7 +76,7 @@ team_t team = {
 #define BP_TO_PREV_FREE(bp) (((void**)bp)[1])
 
 /* DEBUG: 1 if true, 0 if false. Will say more things if true.*/
-#define DEBUG	1
+#define DEBUG	0
 /* Call heapchecker */
 #define	CHEAP() {if(DEBUG)mm_check(0);fflush(stdout);}
 #define	PLIST() {if(DEBUG)printlists();;fflush(stdout);}
@@ -418,25 +418,23 @@ void *mm_realloc(void *ptr, size_t size)
 	size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(ptr)));
 	void* nextblock = NEXT_BLKP(ptr);
 	size_t next_size = GET_SIZE(HDRP(nextblock));
-	int index = get_index(next_size);
-	void* current_list = lists[index];
-	if(!next_alloc && next_size > 0)
+	if(!next_alloc && next_size > 0 && nextblock != NULL)
 	{
-		if(nextblock != NULL && !next_alloc)
-		{
-			SAY2("DEBUG: mm_realloc: through first if. next_alloc: [%u], next_size: [%u]\n", next_alloc, next_size);
-			if (GET_SIZE(HDRP(ptr)) + next_size >= size)
-			{
-				SAY0("DEBUG: mm_realloc: trying trick:\n");
-				printblock(nextblock);
-				/* delete the adjacent free block from the list */
-				list_rm(nextblock);
-				SAY("DEBUG: mm_realloc: removed from list\n");
-				/* update header of block to return*/
-				place(ptr, size);
-				newptr = ptr;
-				return newptr;
-			}
+		size_t combo_size = next_size + GET_SIZE(HDRP(ptr));
+		size_t asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE);
+		SAY2("DEBUG: mm_realloc: next_alloc: [%u], next_size: [%u]\n", next_alloc, next_size);
+		if (combo_size >= size)
+		{	
+			SAY2("DEBUG: mm_realloc: asize:%i combosize:%i\n", asize, combo_size);
+			printblock(nextblock);
+			/* delete the adjacent free block from the list */
+			list_rm(nextblock);
+			SAY("DEBUG: mm_realloc: removed from list\n");
+			/* update header of block to return*/
+			PUT(HDRP(ptr), PACK(combo_size, 0));
+			PUT(FTRP(ptr), PACK(combo_size, 0));
+			place(ptr, asize);
+			return ptr;
 		}
 	}
 
@@ -674,6 +672,8 @@ static int list_rm(void* bp)
 {	/* If list is empty */
 	int index = get_index(GET_SIZE(HDRP(bp)));
 	void* current_list = lists[index];
+	SAY1("DEBUG: list_rm: this should equal true: %i\n", current_list == bp);
+	SAY2("DEBUG: list_rm: current_list:[%p] bp: [%p]\n", current_list, bp);
 	SAY1("DEBUG: list_rm: removing %p\n", bp);
 	if (current_list == NULL)
 	{
@@ -741,6 +741,7 @@ static void place(void *bp, size_t asize)
 {
     size_t csize = GET_SIZE(HDRP(bp));
 	SAY1("DEBUG: placing %p\n", bp);
+	SAY2("DEBUG: place: asize: %u csize: %u\n", asize, csize);
 	
     if ((csize - asize) >= (2*DSIZE)) {
 	PUT(HDRP(bp), PACK(asize, 1));
