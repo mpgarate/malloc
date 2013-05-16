@@ -187,14 +187,9 @@ int mm_init(void)
     heap_listp += (8*WSIZE);
 
     PUT(heap_listp, 0);                          /* Alignment padding */
-	SAY1("DEBUG: mm_init: heap_listp is %p\n", heap_listp);
     PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1)); /* Prologue header */ 
-	SAY1("DEBUG: mm_init: heap_listp + 4 is %p\n", heap_listp + (1*WSIZE));
     PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1)); /* Prologue footer */ 
-	SAY1("DEBUG: mm_init: heap_listp + 8 is %p\n", heap_listp + (2*WSIZE));
     PUT(heap_listp + (3*WSIZE), PACK(0, 1));     /* Epilogue header */
-	SAY1("DEBUG: mm_init: heap_listp + 12 is %p\n", heap_listp + (3*WSIZE));
-	SAY1("DEBUG: mm_init: heap_listp + 20 is %p\n", heap_listp + (5*WSIZE));
     heap_listp += (2*WSIZE);
 
 	SAY0("DEBUG: mm_init: calling extend_heap\n");
@@ -414,27 +409,38 @@ void *mm_realloc(void *ptr, size_t size)
 	return mm_malloc(size);
     }
 	
-	void* nextblock = (void*)GET(NEXT_BLKP(HDRP(ptr)));
-	if(nextblock != NULL && !GET_ALLOC(HDRP(nextblock)))
+	/*
+		size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
+		size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
+		size_t size = GET_SIZE(HDRP(bp));
+	*/
+	
+	size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(ptr)));
+	void* nextblock = NEXT_BLKP(ptr);
+	size_t next_size = GET_SIZE(HDRP(nextblock));
+	int index = get_index(next_size);
+	void* current_list = lists[index];
+	if(!next_alloc && next_size > 0)
 	{
-		SAY("DEBUG: mm_realloc: through first if\n");
-		if (GET_SIZE(HDRP(ptr)) + GET_SIZE(HDRP(nextblock)) >= size)
+		if(nextblock != NULL && !next_alloc)
 		{
-			SAY("DEBUG: mm_realloc: trying trick\n");
-			/* delete the adjacent free block from the list */
-			list_rm(nextblock);
-			/* update header of block to return*/
-			place(ptr, size);
-			newptr = ptr;
+			SAY2("DEBUG: mm_realloc: through first if. next_alloc: [%u], next_size: [%u]\n", next_alloc, next_size);
+			if (GET_SIZE(HDRP(ptr)) + next_size >= size)
+			{
+				SAY0("DEBUG: mm_realloc: trying trick:\n");
+				printblock(nextblock);
+				/* delete the adjacent free block from the list */
+				list_rm(nextblock);
+				SAY("DEBUG: mm_realloc: removed from list\n");
+				/* update header of block to return*/
+				place(ptr, size);
+				newptr = ptr;
+				return newptr;
+			}
 		}
-		else newptr = mm_malloc(size);
-	}
-	else
-	{
-		newptr = mm_malloc(size);
 	}
 
-
+	newptr = mm_malloc(size);
     /* If realloc() fails the original block is left untouched  */
     if(!newptr) {
 	return 0;
@@ -713,7 +719,7 @@ static int list_rm(void* bp)
 		return 1;
 	}
 	/* else it's in the middle */
- 	SAY("DEBUG: list_rm: It's in the middle\n");
+ 	SAY3("DEBUG: list_rm: It's in the middle [%p], next: %p prev:%p\n", bp, BP_TO_NEXT_FREE(bp), BP_TO_PREV_FREE(bp));
 	void* bp_of_prev = BP_TO_PREV_FREE(bp);
 	void* bp_of_next = BP_TO_NEXT_FREE(bp);
 	SAY3("DEBUG: list_rm: %p %p %p\n", bp, bp_of_prev, bp_of_next);
