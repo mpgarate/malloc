@@ -39,7 +39,8 @@ team_t team = {
 /* Basic constants and macros */
 #define WSIZE       4       /* Word and header/footer size (bytes) */
 #define DSIZE       8       /* Doubleword size (bytes) */
-#define CHUNKSIZE  (1<<12)  /* Extend heap by this amount (bytes) */
+#define CHUNKSIZE  (1<<12)/4  /* Extend heap by this amount (bytes) */
+//#define CHUNKSIZE  (1<<12)  /* Extend heap by this amount (bytes) */
 
 #define MAX(x, y) ((x) > (y)? (x) : (y))  
 
@@ -81,14 +82,14 @@ team_t team = {
 #define	CHEAP() {if(DEBUG)mm_check(0);fflush(stdout);}
 #define	PLIST() {if(DEBUG)printlists();;fflush(stdout);}
 
-#define LIST_0_SIZE (unsigned int)(5000)
-#define LIST_1_SIZE (unsigned int)(7000)
-#define LIST_2_SIZE (unsigned int)(12000)
-#define LIST_3_SIZE (unsigned int)(17000)
-#define LIST_4_SIZE (unsigned int)(30000)
-#define LIST_5_SIZE (unsigned int)(50000)
-#define LIST_6_SIZE (unsigned int)(100000)
-#define LIST_7_SIZE (unsigned int)(500000)
+#define LIST_0_SIZE (unsigned int)(32)
+#define LIST_1_SIZE (unsigned int)(64)
+#define LIST_2_SIZE (unsigned int)(128)
+#define LIST_3_SIZE (unsigned int)(512)
+#define LIST_4_SIZE (unsigned int)(4096)
+#define LIST_5_SIZE (unsigned int)(16384)
+#define LIST_6_SIZE (unsigned int)(32768)
+#define LIST_7_SIZE (unsigned int)(131072)
 
 /* Epic macros for SAY */
 #define SAY(fmt)		SAY0(fmt)
@@ -238,29 +239,6 @@ void *mm_malloc(size_t size)
 
     /* No fit found. Get more memory and place the block */
     
-	/* See if we can reduce sbrk call size to merge with existing free block */
-/*
-	SAY2("DEBUG: mm_malloc: heap_lastp: [%p] free_lastp: [%p]\n", heap_lastp, free_lastp);
-	if(heap_lastp != NULL && heap_lastp == free_lastp)
-	{
-		SAY("DEBUG: mm_malloc: They are !NULL and equal each other\n");
-		void* lastblock = heap_lastp;
-		if(asize - (GET_SIZE(HDRP(lastblock))) > 0)
-		{
-			SAY1("DEBUG: mm_malloc: entered the if, GET_SIZE: %u\n", GET_SIZE(HDRP(lastblock)));
-			extendsize = (size_t)GET_SIZE(HDRP(lastblock));
-			SAY1("DEBUG: mm_malloc: extendsize: %u\n", extendsize);
-			extendsize = asize - extendsize;
-			SAY2("DEBUG: mm_malloc: size was %u and is now %u\n", asize, extendsize);
-		}
-	}
-	else
-	{
-		extendsize = asize;
-	}
-	
-	extendsize = MAX(extendsize,CHUNKSIZE);
-*/
 	extendsize = MAX(asize,CHUNKSIZE);
     if ((bp = extend_heap(extendsize/WSIZE)) == NULL)
 		return NULL;
@@ -321,7 +299,6 @@ static void *coalesce(void *bp)
 	SAY0("DEBUG: coalesce: size_t next_alloc set\n");
     size_t size = GET_SIZE(HDRP(bp));
 	SAY0("DEBUG: coalesce: locals declared\n");
-	/* Check if free AND not from extend heap, and then remove from list. This lets us call it from both mm_free, extend_heap, and place */
 	
 	/* Get NEXT_FREE as an unsigned int so that we can compare it to DEADBEEF */
 	if(GET_ALLOC(FTRP(bp)))
@@ -340,8 +317,6 @@ static void *coalesce(void *bp)
     }
 
     else if (prev_alloc && !next_alloc) {      /* Case 2 */
-	
-	/* Remove the block to be merged from the list. It's ok if it isn't there. */
 	list_rm(NEXT_BLKP(bp));
 	size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
 	PUT(HDRP(bp), PACK(size, 0));
@@ -378,7 +353,8 @@ static void *coalesce(void *bp)
 }
 
 /*
- * mm_realloc - Naive implementation of realloc
+ * mm_realloc - Look to see if the next block is free and can fit 
+ * the requested size. If so, do that. Otherwise, call mm_malloc & mm_free. 
  * Based on book code mm.c
  */
 void *mm_realloc(void *ptr, size_t size)
@@ -398,12 +374,6 @@ void *mm_realloc(void *ptr, size_t size)
 	return mm_malloc(size);
     }
 	
-	/*
-		size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
-		size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
-		size_t size = GET_SIZE(HDRP(bp));
-	*/
-	
 	size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(ptr)));
 	void* nextblock = NEXT_BLKP(ptr);
 	size_t next_size = GET_SIZE(HDRP(nextblock));
@@ -415,7 +385,7 @@ void *mm_realloc(void *ptr, size_t size)
 		if (combo_size >= size)
 		{	
 			SAY2("DEBUG: mm_realloc: asize:%i combosize:%i\n", asize, combo_size);
-			printblock(nextblock);
+			//printblock(nextblock);
 			/* delete the adjacent free block from the list */
 			list_rm(nextblock);
 			SAY("DEBUG: mm_realloc: removed from list\n");
@@ -517,10 +487,6 @@ void mm_check(int verbose)
 }
 
 /* 
- * The remaining routines are internal helper routines 
- */
-
-/* 
  * extend_heap - Extend heap with free block and return its block pointer
  */
  
@@ -545,7 +511,6 @@ static void *extend_heap(size_t words)
     /* Coalesce if the previous block was free */
 	heap_lastp = bp;
 	SAY1("DEBUG: extend_heap: calling list_add %p\n", bp);
-	//list_add(bp); /* This prevents list_rm from breaking in this case */
 	SAY1("DEBUG: extend_heap: calling coalesce(%p)\n", bp);
 	bp = coalesce(bp);
 	
